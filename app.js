@@ -8,7 +8,7 @@ const maxBatch = 400;
 const maxTitleLength = 120;
 const maxBackupBytes = 32 * 1024 * 1024;
 const state = {
-  notes: [], view: "all", query: "", oldestFirst: false,
+  notes: [], view: "all", query: "", sort: "date",
   selecting: false, selected: new Set(), store: null,
   editingId: null, tagIds: [], draftTags: new Set(),
   recentCapture: null,
@@ -83,9 +83,21 @@ function counts() {
   return [...tags].sort(([a], [b]) => collator.compare(a, b));
 }
 
+function showPanel(writing) {
+  const composer = byId("write-panel");
+  if (composer.hidden === !writing) return;
+  setSortOpen(false);
+  composer.hidden = !writing;
+  byId("browse-panel").hidden = writing;
+  byId("write-note").setAttribute("aria-pressed", String(writing));
+  byId("browse-notes").setAttribute("aria-pressed", String(!writing));
+  window.scrollTo(0, 0);
+}
+
 function chooseView(id) {
   state.view = id;
   state.selected.clear();
+  showPanel(false);
   render();
 }
 
@@ -135,13 +147,13 @@ function showNewCategoryForm(show) {
   else byId("quick-name").value = "";
 }
 
-function viewCategory(category) {
+function finishCaptureInView(view) {
   const dialog = byId("capture-categories");
-  if (dialog.open) dialog.close();
   state.query = "";
   byId("search").value = "";
-  chooseView("tag:" + category);
-  byId("list-title").scrollIntoView({ block: "nearest" });
+  chooseView(view);
+  dialogFocus.set(dialog, byId("list-title"));
+  dialog.close();
 }
 
 function drawQuickCategories() {
@@ -242,11 +254,10 @@ async function saveQuickCategories(categories, destination) {
     return;
   }
   if (destination) {
-    viewCategory(destination);
+    finishCaptureInView("tag:" + destination);
     toast("‘" + destination + "’에 추가했어요.");
   } else {
-    dialog.close();
-    chooseView("all");
+    finishCaptureInView("all");
     toast("메모를 " + categories.length + "곳에 추가했어요.");
   }
 }
@@ -293,8 +304,12 @@ function visibleNotes() {
     if (!matchesView(note)) return false;
     const haystack = normalize([note.title, note.body, note.thumbnail ? "사진" : "", ...note.tags].join(" "));
     return terms.every((term) => haystack.includes(term));
-  }).sort((a, b) => (state.oldestFirst ? a.createdAt - b.createdAt : b.createdAt - a.createdAt)
-    || a.id.localeCompare(b.id));
+  }).sort((a, b) => (state.sort === "name" ? collator.compare(noteHeading(a), noteHeading(b)) : 0)
+    || b.createdAt - a.createdAt || a.id.localeCompare(b.id));
+}
+
+function noteHeading(note, firstLine) {
+  return note.title || (firstLine ?? note.body.split(/\r?\n/u, 1)[0]) || "사진 메모";
 }
 
 function drawNote(note) {
@@ -306,7 +321,7 @@ function drawNote(note) {
   date.dateTime = new Date(note.createdAt).toISOString();
   date.title = fullDate.format(note.createdAt);
   const [firstLine, ...rest] = note.body.split(/\r?\n/u);
-  const title = note.title || firstLine || "사진 메모";
+  const title = noteHeading(note, firstLine);
   if (state.selecting) {
     const check = node("input", "note-check");
     check.type = "checkbox";
@@ -745,10 +760,13 @@ document.addEventListener("paste", (event) => {
   const photo = !dialog.length ? capturePhoto : dialog.length === 1 && dialog[0].id === "editor" ? editPhoto : null;
   if (!photo) return;
   event.preventDefault();
+  if (photo === capturePhoto) showPanel(true);
   void photo.choose(file);
 });
 
 byId("today").textContent = dateLabel.format(new Date());
+byId("browse-notes").addEventListener("click", () => showPanel(false));
+byId("write-note").addEventListener("click", () => showPanel(true));
 byId("capture-body").addEventListener("input", updateCaptureButton);
 byId("capture-body").addEventListener("keydown", (event) => {
   if (!event.isComposing && (event.ctrlKey || event.metaKey) && event.key === "Enter") {
@@ -778,9 +796,7 @@ byId("capture-form").addEventListener("submit", async (event) => {
     state.recentCapture = {
       id, multiple: false, selected: new Set(), newCategories: [], saving: false, expanded: false,
     };
-    state.query = "";
-    byId("search").value = "";
-    chooseView("all");
+    drawQuickCategories();
     openDialog("capture-categories");
   }
   updateCaptureButton();
@@ -797,9 +813,10 @@ byId("quick-more").addEventListener("click", () => {
   capture.expanded = !capture.expanded;
   drawQuickCategories();
 });
-byId("quick-dismiss").addEventListener("click", () => byId("capture-categories").close());
+byId("quick-dismiss").addEventListener("click", () => finishCaptureInView("all"));
 byId("capture-categories").addEventListener("cancel", (event) => {
-  if (state.recentCapture?.saving) event.preventDefault();
+  event.preventDefault();
+  if (!state.recentCapture?.saving) finishCaptureInView("all");
 });
 byId("capture-categories").addEventListener("close", () => {
   state.recentCapture = null;
@@ -818,14 +835,37 @@ byId("clear-search").addEventListener("click", () => {
   render();
   byId("search").focus();
 });
-byId("sort").addEventListener("click", (event) => {
-  state.oldestFirst = !state.oldestFirst;
-  const label = state.oldestFirst ? "최근 메모부터 보기" : "오래된 메모부터 보기";
-  event.currentTarget.setAttribute("aria-label", label);
-  event.currentTarget.setAttribute("aria-pressed", String(state.oldestFirst));
-  event.currentTarget.title = label;
-  render();
-  byId("announcement").textContent = state.oldestFirst ? "오래된 순으로 정렬했어요." : "최근 순으로 정렬했어요.";
+const sortButton = byId("sort");
+const sortOptions = byId("sort-options");
+const sortChoices = [...sortOptions.querySelectorAll("[data-sort]")];
+
+function setSortOpen(open, restoreFocus = false) {
+  sortButton.setAttribute("aria-expanded", String(open));
+  sortOptions.hidden = !open;
+  if (restoreFocus) sortButton.focus({ preventScroll: true });
+}
+
+sortButton.addEventListener("click", () => setSortOpen(sortOptions.hidden));
+for (const choice of sortChoices) {
+  choice.addEventListener("click", () => {
+    state.sort = choice.dataset.sort;
+    for (const option of sortChoices) option.setAttribute("aria-pressed", String(option === choice));
+    setSortOpen(false, true);
+    render();
+    byId("announcement").textContent = state.sort === "date" ? "날짜순으로 정렬했어요." : "가나다순으로 정렬했어요.";
+  });
+}
+const sortControl = byId("sort-control");
+sortControl.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || sortOptions.hidden) return;
+  event.preventDefault();
+  setSortOpen(false, true);
+});
+sortControl.addEventListener("focusout", (event) => {
+  if (event.relatedTarget && !sortControl.contains(event.relatedTarget)) setSortOpen(false);
+});
+document.addEventListener("click", (event) => {
+  if (!sortOptions.hidden && !sortControl.contains(event.target)) setSortOpen(false);
 });
 byId("select").addEventListener("click", () => {
   state.selecting = !state.selecting;
@@ -1042,6 +1082,8 @@ async function start() {
       editPhoto.reset();
       updateCaptureButton();
       for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
+      setSortOpen(false);
+      showPanel(false);
       if (!user) {
         showWorkspace(false);
         byId("auth-caption").textContent = "로그인하면 폰과 PC에서 같은 메모를 볼 수 있어요.";

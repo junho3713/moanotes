@@ -8,8 +8,8 @@
   <meta name="description" content="모아에서 생각을 빠르게 기록하고, 주제로 모아보세요.">
   <title>모아 — 개인 메모장</title>
   <link rel="icon" href="./moa.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=9">
-  <script type="module" src="./app.js?v=9"></script>
+  <link rel="stylesheet" href="./style.css?v=10">
+  <script type="module" src="./app.js?v=10"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -55,8 +55,13 @@
         <button type="button" class="icon-btn mobile-utility" id="mobile-signout" aria-label="로그아웃" hidden><svg class="icon"><use href="#i-account"/></svg></button>
       </header>
 
-      <section class="capture" aria-labelledby="page-title">
-        <h1 id="page-title">내 메모</h1>
+      <nav class="workspace-nav" aria-label="메모 화면">
+        <button type="button" id="browse-notes" aria-controls="browse-panel" aria-pressed="true"><svg class="icon" aria-hidden="true"><use href="#i-notes"/></svg>메모 보기</button>
+        <button type="button" id="write-note" aria-controls="write-panel" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>메모 쓰기</button>
+      </nav>
+
+      <section class="capture" id="write-panel" aria-labelledby="page-title" hidden>
+        <h1 id="page-title">새 메모</h1>
         <form id="capture-form" class="capture-form">
           <input id="capture-title" class="capture-title" type="text" maxlength="120" aria-label="메모 제목 (선택)" placeholder="메모 제목">
           <textarea id="capture-body" rows="6" maxlength="20000" aria-label="메모 내용" placeholder="떠오르는 생각을 적어보세요"></textarea>
@@ -80,16 +85,22 @@
         </form>
       </section>
 
-      <div id="mobile-nav" class="mobile-nav" aria-label="메모 보기"></div>
-      <section class="collection" aria-labelledby="list-title">
+      <section class="collection" id="browse-panel" aria-labelledby="list-title">
+        <nav id="mobile-nav" class="mobile-nav" aria-label="메모 보관함과 분류"></nav>
         <div class="collection-header">
-          <h2 id="list-title">모든 메모</h2>
+          <h1 id="list-title" tabindex="-1">모든 메모</h1>
           <span id="note-count" class="note-count"></span>
           <div class="list-controls">
             <label class="search"><svg class="icon"><use href="#i-search"/></svg><input type="search" id="search" maxlength="120" placeholder="메모 검색" aria-label="메모 검색"></label>
             <button type="button" class="icon-btn outline" id="select" aria-label="여러 메모 선택" aria-pressed="false" title="여러 메모 선택"><svg class="icon"><use href="#i-select"/></svg></button>
             <button type="button" class="icon-btn outline" id="grid-view" aria-label="촘촘하게 보기" aria-pressed="false" aria-controls="notes" title="촘촘하게 보기"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg></button>
-            <button type="button" class="icon-btn outline" id="sort" aria-label="오래된 메모부터 보기" aria-pressed="false" title="오래된 메모부터 보기"><svg class="icon"><use href="#i-sort"/></svg></button>
+            <div class="sort-control" id="sort-control">
+              <button type="button" class="icon-btn outline" id="sort" aria-label="메모 정렬" aria-expanded="false" aria-controls="sort-options" title="메모 정렬"><svg class="icon" aria-hidden="true"><use href="#i-sort"/></svg></button>
+              <div class="sort-options" id="sort-options" role="group" aria-label="정렬 방식" hidden>
+                <button type="button" data-sort="date" aria-pressed="true">날짜순<svg class="icon" aria-hidden="true"><use href="#i-check"/></svg></button>
+                <button type="button" data-sort="name" aria-pressed="false">가나다순<svg class="icon" aria-hidden="true"><use href="#i-check"/></svg></button>
+              </div>
+            </div>
           </div>
         </div>
         <div id="selection" class="selection-bar" hidden>
