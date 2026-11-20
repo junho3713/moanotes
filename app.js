@@ -1,6 +1,7 @@
 import { firebaseConfig } from "./firebase-config.js";
+import { createCategoryPreferences, replaceCategory, validateCategoryName } from "./categories.js?v=22";
 import { createRelatedNotes } from "./related-notes.js?v=21";
-import { localStore, openCloud } from "./storage.js?v=15";
+import { localStore, openCloud } from "./storage.js?v=22";
 import { maxPhotoBytes, maxThumbnailBytes, photoParts, preparePhoto } from "./images.js?v=6";
 
 const byId = (id) => document.getElementById(id);
@@ -50,6 +51,14 @@ let batchDeleteIds = [];
 let photoViewerRequest = 0;
 let backupRequest = 0;
 const backupUrls = [];
+let categoryMenuTag = null;
+let categoryMenuAnchor = null;
+let renameCategoryFrom = null;
+let categoryRenameBusy = false;
+let categoryDrag = null;
+const categoryPreferences = createCategoryPreferences({
+  onError: () => toast("분류 설정을 저장하지 못해 현재 창에서만 적용돼요.", true),
+});
 const relatedNotes = createRelatedNotes({
   root: byId("related-notes"),
   toggle: byId("ai-explore"),
@@ -148,6 +157,7 @@ function navigationItem(id, label, count, marker, mobile) {
 }
 
 function renderNavigation(tags) {
+  closeCategoryMenu();
   const desktop = [], mobile = [];
   for (const folder of folders) {
     const count = state.notes.filter(folder.test).length;
@@ -156,14 +166,208 @@ function renderNavigation(tags) {
   }
   byId("folders").replaceChildren(...desktop);
   const topicItems = [];
-  for (const [tag, count] of tags) {
-    topicItems.push(navigationItem("tag:" + tag, tag, count, node("span", "topic-dot " + palette(tag)), false));
-    mobile.push(navigationItem("tag:" + tag, tag, count, undefined, true));
+  for (const [tag, count] of categoryPreferences.ordered(tags)) {
+    const row = node("div", "topic-row");
+    const item = navigationItem("tag:" + tag, tag, count, node("span", "topic-dot " + palette(tag)), false);
+    const chip = navigationItem("tag:" + tag, tag, count, undefined, true);
+    if (categoryPreferences.isPinned(tag)) {
+      const pin = icon("pin");
+      pin.classList.add("topic-pin");
+      item.append(pin);
+      chip.append(icon("pin"));
+    }
+    row.append(item, categoryMenuButton(tag));
+    topicItems.push(row);
+    mobile.push(chip);
   }
+  if (tags.length) mobile.push(button("mobile-chip", "분류 관리", openCategoryOrder));
   byId("topics").replaceChildren(...topicItems);
   byId("topics").closest(".rail-topics").hidden = tags.length === 0;
   byId("mobile-nav").replaceChildren(...mobile);
+  if (byId("category-order-dialog").open) renderCategoryOrder();
 }
+
+
+function categoryMenuButton(tag) {
+  const item = button("icon-btn topic-menu-button", "⋯", (event) => showCategoryMenu(tag, event.currentTarget));
+  item.setAttribute("aria-label", tag + " 분류 메뉴");
+  item.setAttribute("aria-haspopup", "menu");
+  item.setAttribute("aria-expanded", "false");
+  item.setAttribute("aria-controls", "category-menu");
+  item.dataset.focusKey = "category-menu-" + tag;
+  return item;
+}
+
+function closeCategoryMenu(restoreFocus = false) {
+  const menu = byId("category-menu");
+  if (menu.matches(":popover-open")) menu.hidePopover();
+  categoryMenuAnchor?.setAttribute("aria-expanded", "false");
+  if (restoreFocus && categoryMenuAnchor?.isConnected) categoryMenuAnchor.focus();
+  categoryMenuAnchor = null;
+  categoryMenuTag = null;
+}
+
+function showCategoryMenu(tag, anchor) {
+  closeCategoryMenu();
+  const menu = byId("category-menu");
+  (anchor.closest("dialog") || document.body).append(menu);
+  categoryMenuTag = tag;
+  categoryMenuAnchor = anchor;
+  anchor.setAttribute("aria-expanded", "true");
+  byId("category-pin").textContent = categoryPreferences.isPinned(tag) ? "고정 해제" : "고정";
+  menu.showPopover();
+  const rect = anchor.getBoundingClientRect();
+  menu.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8)) + "px";
+  menu.style.top = Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - menu.offsetHeight - 8)) + "px";
+  byId("category-pin").focus();
+}
+
+function moveCategory(from, to, focusAction = "up") {
+  if (!categoryPreferences.move(counts(), from, to)) return;
+  render();
+  byId("category-order-status").textContent = "‘" + from + "’ 분류의 순서를 바꿨어요.";
+  const key = "category-" + focusAction + "-" + from;
+  const control = document.querySelector("[data-focus-key='" + CSS.escape(key) + "']");
+  if (control && !control.disabled) control.focus();
+  else focusCategoryAction(from);
+}
+
+function focusCategoryAction(tag) {
+  const host = byId("category-order-dialog").open ? byId("category-order-dialog") : byId("topics");
+  host.querySelector("[data-focus-key='" + CSS.escape("category-menu-" + tag) + "']")?.focus();
+}
+
+function renderCategoryOrder() {
+  const ordered = categoryPreferences.ordered(counts());
+  byId("category-order-list").replaceChildren(...ordered.map(([tag, count], index) => {
+    const row = node("div", "category-order-row");
+    row.draggable = true;
+    row.dataset.category = tag;
+    const handle = node("span", "category-drag", "⠿");
+    handle.setAttribute("aria-hidden", "true");
+    row.append(handle);
+    const label = node("span", "category-order-label", tag);
+    label.title = tag;
+    row.append(label, node("span", "category-order-count", String(count)));
+    if (categoryPreferences.isPinned(tag)) {
+      const pin = icon("pin");
+      pin.classList.add("topic-pin");
+      row.append(pin);
+    }
+    const sameGroup = (other) => other && categoryPreferences.isPinned(other[0]) === categoryPreferences.isPinned(tag);
+    const up = button("icon-btn category-move", "↑", () => moveCategory(tag, ordered[index - 1]?.[0], "up"));
+    const down = button("icon-btn category-move", "↓", () => moveCategory(tag, ordered[index + 1]?.[0], "down"));
+    up.disabled = !sameGroup(ordered[index - 1]);
+    down.disabled = !sameGroup(ordered[index + 1]);
+    up.setAttribute("aria-label", tag + " 위로 이동");
+    down.setAttribute("aria-label", tag + " 아래로 이동");
+    up.dataset.focusKey = "category-up-" + tag;
+    down.dataset.focusKey = "category-down-" + tag;
+    row.append(up, down, categoryMenuButton(tag));
+    row.addEventListener("dragstart", (event) => {
+      categoryDrag = tag;
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", tag);
+      row.classList.add("dragging");
+    });
+    row.addEventListener("dragover", (event) => {
+      if (!categoryDrag || categoryPreferences.isPinned(categoryDrag) !== categoryPreferences.isPinned(tag)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+    });
+    row.addEventListener("drop", (event) => {
+      event.preventDefault();
+      if (categoryDrag) moveCategory(categoryDrag, tag);
+      categoryDrag = null;
+    });
+    row.addEventListener("dragend", () => { categoryDrag = null; row.classList.remove("dragging"); });
+    return row;
+  }));
+}
+
+function openCategoryOrder() {
+  renderCategoryOrder();
+  openDialog("category-order-dialog");
+}
+
+byId("category-sort").addEventListener("click", openCategoryOrder);
+byId("category-pin").addEventListener("click", () => {
+  const tag = categoryMenuTag;
+  if (!tag) return;
+  const pinned = categoryPreferences.isPinned(tag);
+  closeCategoryMenu();
+  categoryPreferences.togglePin(tag);
+  render();
+  focusCategoryAction(tag);
+  toast(pinned ? "분류 고정을 해제했어요." : "분류를 위에 고정했어요.");
+});
+byId("category-rename").addEventListener("click", () => {
+  const tag = categoryMenuTag;
+  const anchor = categoryMenuAnchor;
+  if (!tag) return;
+  closeCategoryMenu();
+  renameCategoryFrom = tag;
+  byId("rename-category-copy").textContent = "‘" + tag + "’에 속한 메모들의 분류 이름도 함께 바뀝니다.";
+  const input = byId("rename-category-name");
+  input.disabled = false;
+  input.value = tag;
+  openDialog("rename-category-dialog");
+  if (anchor) dialogFocus.set(byId("rename-category-dialog"), anchor);
+  input.focus();
+  input.select();
+});
+byId("category-menu").addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    closeCategoryMenu(true);
+  } else if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+    event.preventDefault();
+    const options = [...byId("category-menu").querySelectorAll("button")];
+    const index = options.indexOf(document.activeElement);
+    options[(index + (event.key === "ArrowDown" ? 1 : options.length - 1)) % options.length].focus();
+  }
+});
+byId("category-menu").addEventListener("toggle", (event) => {
+  if (event.newState === "closed" && !byId("category-menu").matches(":popover-open")) closeCategoryMenu();
+});
+window.addEventListener("resize", () => closeCategoryMenu());
+byId("category-order-dialog").addEventListener("close", () => { closeCategoryMenu(); categoryDrag = null; });
+byId("rename-category-dialog").addEventListener("cancel", (event) => {
+  if (categoryRenameBusy) event.preventDefault();
+});
+byId("rename-category-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (categoryRenameBusy || !renameCategoryFrom || !state.store) return;
+  const from = renameCategoryFrom;
+  const input = byId("rename-category-name");
+  const dialog = byId("rename-category-dialog");
+  let name;
+  try { name = validateCategoryName(input.value, counts().map(([tag]) => tag), from); }
+  catch (error) { announce(error.message, dialog); input.focus(); return; }
+  if (name === from) { dialog.close(); return; }
+  if (!state.notes.some((note) => note.tags.includes(from))) {
+    announce("이 분류가 이미 변경되었어요. 창을 닫고 다시 확인해 주세요.", dialog);
+    return;
+  }
+  const store = state.store;
+  const wasCurrent = state.view === "tag:" + from;
+  categoryRenameBusy = true;
+  input.disabled = true;
+  const saved = await save(() => store.renameTag(from, name), event.currentTarget);
+  categoryRenameBusy = false;
+  input.disabled = false;
+  if (state.store !== store || !saved) return;
+  categoryPreferences.rename(from, name);
+  state.notes = state.notes.map((note) => note.tags.includes(from)
+    ? { ...note, tags: replaceCategory(note.tags, from, name) } : note);
+  if (wasCurrent) state.view = "tag:" + name;
+  relatedNotes.notesChanged();
+  render();
+  dialog.close();
+  focusCategoryAction(name);
+  toast("분류 이름을 ‘" + name + "’(으)로 바꿨어요.");
+});
 
 function normalize(text) {
   return text.normalize("NFKC").toLocaleLowerCase("ko-KR").trim();
@@ -621,6 +825,7 @@ async function save(action, form, errorDialog = form?.closest("dialog")) {
     return true;
   } catch (error) {
     const message = error.deletedCount ? "메모 " + error.deletedCount + "개를 삭제했어요. 창을 닫고 남은 메모를 다시 선택해 주세요."
+      : error.renamedCount ? "메모 " + error.renamedCount + "개의 분류를 변경했어요. 남은 메모는 이전 분류에서 다시 시도해 주세요."
       : error.message === "offline" ? "인터넷 연결을 확인해 주세요."
       : error.code === "permission-denied" ? "이 계정의 메모 저장 권한을 확인해 주세요."
       : "저장하지 못했어요. 잠시 후 다시 시도해 주세요.";
@@ -1234,7 +1439,7 @@ byId("backup-dialog").addEventListener("close", () => {
   clearBackupParts();
 });
 for (const dialog of document.querySelectorAll("dialog")) {
-  dialog.querySelector("[data-close]")?.addEventListener("click", () => dialog.close());
+  for (const close of dialog.querySelectorAll("[data-close]")) close.addEventListener("click", () => dialog.close());
   dialog.addEventListener("close", () => {
     const lastFocus = dialogFocus.get(dialog);
     if (lastFocus?.isConnected) lastFocus.focus();
@@ -1279,6 +1484,10 @@ function onStorageError(error) {
 }
 
 function resetWorkspaceSession() {
+  closeCategoryMenu();
+  categoryPreferences.use(null);
+  renameCategoryFrom = null;
+  categoryDrag = null;
   relatedNotes.reset();
   state.store?.disconnect();
   state.store = null;
@@ -1348,6 +1557,7 @@ function connectAccounts(cloud) {
         return false;
       }
     }
+    categoryPreferences.use(user.uid);
     state.store = cloud.getStore(user.uid, onNotes, onStorageError);
     render();
     updateCaptureButton();
@@ -1422,6 +1632,7 @@ function connectAccounts(cloud) {
 
 async function start() {
   if (!firebaseConfig) {
+    categoryPreferences.use("demo");
     state.store = localStore(onNotes, onStorageError);
     setConnection("이 기기에서 체험");
     showWorkspace(true);

@@ -8,8 +8,8 @@
   <meta name="description" content="모아에서 생각을 빠르게 기록하고, 주제로 모아보세요.">
   <title>모아 — 개인 메모장</title>
   <link rel="icon" href="./moa.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=21">
-  <script type="module" src="./app.js?v=21"></script>
+  <link rel="stylesheet" href="./style.css?v=22">
+  <script type="module" src="./app.js?v=22"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -46,7 +46,10 @@
       <p class="rail-heading">보관함</p>
       <nav id="folders" class="folders" aria-label="보관함"></nav>
       <div class="rail-topics">
-        <p class="rail-heading">분류</p>
+        <div class="topic-heading">
+          <p class="rail-heading">분류</p>
+          <button type="button" class="icon-btn category-sort" id="category-sort" aria-label="분류 수동 정렬" title="수동 정렬"><svg class="icon" aria-hidden="true"><use href="#i-sort"/></svg></button>
+        </div>
         <nav id="topics" class="topics" aria-label="분류"></nav>
       </div>
     </div>
@@ -252,6 +255,39 @@
         <button type="button" id="add-tag" class="soft-btn">추가</button>
       </div>
       <div class="dialog-actions end"><button type="submit" class="primary">적용</button></div>
+    </form>
+  </dialog>
+
+  <div id="category-menu" class="category-menu" popover="auto" role="menu" aria-label="분류 작업">
+    <button type="button" id="category-pin" role="menuitem">고정</button>
+    <button type="button" id="category-rename" role="menuitem">이름 변경</button>
+  </div>
+
+  <dialog id="category-order-dialog" aria-labelledby="category-order-title" aria-describedby="category-order-hint">
+    <div class="dialog-head">
+      <h2 id="category-order-title">분류 수동 정렬</h2>
+      <button type="button" class="icon-btn" data-close aria-label="닫기"><svg class="icon"><use href="#i-close"/></svg></button>
+    </div>
+    <p id="category-order-hint" class="dialog-copy">드래그하거나 위·아래 버튼으로 순서를 바꿔보세요. 고정한 분류는 위에 모여요.</p>
+    <p class="category-local-hint">순서와 고정은 계정별로 이 브라우저에 저장돼요.</p>
+    <div id="category-order-list" class="category-order-list"></div>
+    <p id="category-order-status" class="visually-hidden" role="status" aria-live="polite"></p>
+    <div class="dialog-actions end"><button type="button" class="primary" data-close>완료</button></div>
+  </dialog>
+
+  <dialog id="rename-category-dialog" aria-labelledby="rename-category-title">
+    <form id="rename-category-form">
+      <div class="dialog-head">
+        <h2 id="rename-category-title">분류 이름 변경</h2>
+        <button type="button" class="icon-btn" data-close aria-label="닫기"><svg class="icon"><use href="#i-close"/></svg></button>
+      </div>
+      <p id="rename-category-copy" class="dialog-copy"></p>
+      <label for="rename-category-name">새 이름</label>
+      <input type="text" id="rename-category-name" maxlength="20" required autocomplete="off">
+      <div class="dialog-actions end">
+        <button type="button" class="plain-btn" data-close>취소</button>
+        <button type="submit" class="primary">이름 변경</button>
+      </div>
     </form>
   </dialog>
 

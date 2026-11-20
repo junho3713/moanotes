@@ -323,3 +323,35 @@ dialog textarea { resize: vertical; max-height: 46dvh; }
   .related-notes { padding: 14px; }
   .related-note { padding: 12px; }
 }
+
+/* Category controls share the existing sidebar spacing and colors. */
+.topic-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: -6px 0 5px; }
+.topic-heading .rail-heading { margin-bottom: 0; }
+.category-sort { width: 30px; height: 30px; }
+.category-sort .icon { width: 17px; height: 17px; }
+.topic-row { display: flex; align-items: center; gap: 2px; min-width: 0; border-radius: 9px; }
+.topic-row:hover, .topic-row:focus-within { background: #e4e8dd; }
+.topic-row .rail-button { flex: 1; min-width: 0; gap: 6px; padding-inline: 6px; }
+.topic-pin { width: 14px; height: 14px; flex: 0 0 auto; color: var(--muted); }
+.topic-menu-button { flex: 0 0 28px; width: 28px; height: 32px; font-size: 21px; line-height: 1; opacity: 0; }
+.topic-row:hover .topic-menu-button, .topic-row:focus-within .topic-menu-button { opacity: 1; }
+.category-menu { position: fixed; inset: auto; margin: 0; padding: 5px; width: 170px; border: 1px solid var(--line); border-radius: 10px; background: var(--sheet); color: var(--ink); box-shadow: 0 7px 22px rgb(29 43 32 / .16); }
+.category-menu button { display: block; width: 100%; min-height: 40px; padding: 8px 12px; border: 0; border-radius: 7px; background: transparent; text-align: left; font-size: 14px; }
+.category-menu button:hover, .category-menu button:focus-visible { background: var(--tint); }
+.category-local-hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+.category-order-list { display: grid; gap: 6px; margin-top: 16px; }
+.category-order-row { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 7px 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); }
+.category-order-row.dragging { opacity: .45; }
+.category-order-row .topic-menu-button { opacity: 1; }
+.category-drag { color: var(--muted); cursor: grab; font-size: 23px; }
+.category-order-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 650; }
+.category-order-count { color: var(--muted); font-size: 12px; }
+.category-move { width: 32px; height: 36px; font-size: 19px; }
+#rename-category-form label { margin-top: 15px; }
+@media (hover: none) {
+  .topic-menu-button { opacity: 1; }
+}
+@media (max-width: 740px) {
+  .category-order-row { gap: 4px; }
+  .category-order-row button { width: 40px; height: 44px; flex-basis: 40px; }
+}

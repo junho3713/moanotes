@@ -1,4 +1,5 @@
 import { maxPhotoBytes, photoParts } from "./images.js?v=6";
+import { replaceCategory, renameCloudCategory } from "./categories.js?v=22";
 
 const demoKey = "moa.demo.notes.v1";
 const localPhoto = (image) => ({ thumbnail: image?.thumbnail ?? "", imageData: image?.data ?? "" });
@@ -63,6 +64,10 @@ export function localStore(onChange, onError) {
       write((items) => items.map((note) => ids.includes(note.id)
         ? { ...note, tags: [...new Set([...note.tags, ...tags])], updatedAt }
         : note));
+    },
+    async renameTag(from, to) {
+      write((items) => items.map((note) => note.tags.includes(from)
+        ? { ...note, tags: replaceCategory(note.tags, from, to) } : note));
     },
     async importNotes(rows) { write((items) => [...items, ...rows.map((note) => ({ ...note, id: crypto.randomUUID() }))]); },
   };
@@ -160,6 +165,7 @@ export async function openCloud(config) {
         },
         remove: (id) => removeMany([id]),
         removeMany,
+        renameTag: (from, to) => renameCloudCategory(db, dbSdk, collection, from, to),
         async addTags(ids, tags, updatedAt) {
           const batch = dbSdk.writeBatch(db);
           for (const id of ids) {
