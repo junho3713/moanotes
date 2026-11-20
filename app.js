@@ -322,6 +322,37 @@ function noteHeading(note, firstLine) {
   return note.title || (firstLine ?? note.body.split(/\r?\n/u, 1)[0]) || "사진 메모";
 }
 
+function makeMemoLinks(title, body, limit = Infinity) {
+  const links = [];
+  const seen = new Set();
+  const text = (title ?? "") + "\n" + body;
+  const pattern = /(?<![\p{L}\p{N}_@./])(?:https?:\/\/|www\.)[^\s<>"'\\\x60“”‘’]+/giu;
+  for (const [match] of text.matchAll(pattern)) {
+    let address = match.replace(/[.,!?;:，。！？、…]+$/u, "");
+    const trailing = address.match(/\)+$/u)?.[0].length ?? 0;
+    if (trailing) {
+      const extra = address.split(")").length - address.split("(").length;
+      address = address.slice(0, address.length - Math.max(0, Math.min(extra, trailing)));
+    }
+    let url;
+    try {
+      url = new URL(/^www\./iu.test(address) ? "https://" + address : address);
+    } catch {
+      continue;
+    }
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || seen.has(url.href)) continue;
+    seen.add(url.href);
+    const link = node("a", "memo-link", address.replace(/^https?:\/\//iu, ""));
+    link.href = url.href;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.title = address;
+    links.push(link);
+    if (links.length === limit) break;
+  }
+  return links;
+}
+
 function drawNote(note) {
   const article = node("article", "note");
   const checked = state.selecting && state.selected.has(note.id);
@@ -374,7 +405,15 @@ function drawNote(note) {
   edit.dataset.focusKey = "tags-" + note.id;
   edit.append(icon(note.tags.length ? "tag" : "plus"), note.tags.length ? "분류 편집" : "분류 추가");
   foot.append(edit);
-  article.append(meta, content, foot);
+  article.append(meta, content);
+  const links = makeMemoLinks(note.title, note.body, 2);
+  if (links.length) {
+    const destinations = node("div", "memo-links");
+    links.forEach((link, index) => { link.dataset.focusKey = "link-" + note.id + "-" + index; });
+    destinations.append(...links);
+    article.append(destinations);
+  }
+  article.append(foot);
   return article;
 }
 
@@ -563,10 +602,18 @@ const editPhoto = createPhotoField("edit-photo", (pending) => {
   byId("editor-form").querySelector("button[type='submit']").disabled = pending;
 });
 
+function updateEditorLinks() {
+  const destinations = byId("edit-links");
+  const links = makeMemoLinks(byId("edit-title").value, byId("edit-body").value);
+  destinations.replaceChildren(...links);
+  destinations.hidden = links.length === 0;
+}
+
 function showEditor(note) {
   state.editingId = note.id;
   byId("edit-title").value = note.title ?? "";
   byId("edit-body").value = note.body;
+  updateEditorLinks();
   editPhoto.reset(photoParts(note.thumbnail, maxThumbnailBytes) ? { id: note.id, thumbnail: note.thumbnail } : null);
   byId("delete-confirm").hidden = true;
   openDialog("editor");
@@ -952,6 +999,7 @@ byId("tag-form").addEventListener("submit", async (event) => {
     toast("분류를 적용했어요.");
   }
 });
+for (const id of ["edit-title", "edit-body"]) byId(id).addEventListener("input", updateEditorLinks);
 byId("editor-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const title = byId("edit-title").value.trim();

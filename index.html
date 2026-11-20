@@ -8,8 +8,8 @@
   <meta name="description" content="모아에서 생각을 빠르게 기록하고, 주제로 모아보세요.">
   <title>모아 — 개인 메모장</title>
   <link rel="icon" href="./moa.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=11">
-  <script type="module" src="./app.js?v=11"></script>
+  <link rel="stylesheet" href="./style.css?v=12">
+  <script type="module" src="./app.js?v=12"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -171,6 +171,7 @@
       <input type="text" id="edit-title" class="edit-title" maxlength="120" placeholder="메모 제목">
       <label for="edit-body">내용</label>
       <textarea id="edit-body" rows="6" maxlength="20000"></textarea>
+      <div class="memo-links" id="edit-links" role="group" aria-label="메모에 있는 링크" hidden></div>
       <div class="photo-field" id="edit-photo">
         <input type="file" accept="image/*" data-photo-file hidden>
         <div class="photo-controls">
