@@ -8,7 +8,7 @@
   <meta name="description" content="모아에서 생각을 빠르게 기록하고, 주제로 모아보세요.">
   <title>모아 — 개인 메모장</title>
   <link rel="icon" href="./moa.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=6">
+  <link rel="stylesheet" href="./style.css?v=7">
   <script type="module" src="./app.js?v=6"></script>
 </head>
 <body>
@@ -61,20 +61,22 @@
           <input id="capture-title" class="capture-title" type="text" maxlength="120" placeholder="메모 제목">
           <label for="capture-body">내용</label>
           <textarea id="capture-body" rows="2" maxlength="20000" placeholder="떠오르는 생각을 적어보세요"></textarea>
-          <div class="photo-field" id="capture-photo">
+          <div class="capture-footer" id="capture-photo">
             <input type="file" accept="image/*" data-photo-file hidden>
-            <div class="photo-controls">
-              <button type="button" class="photo-add" data-photo-add><svg class="icon" aria-hidden="true"><use href="#i-photo"/></svg><span>사진 추가</span></button>
-              <span class="photo-status" data-photo-status role="status"></span>
-            </div>
             <div class="photo-preview" data-photo-preview hidden>
               <button type="button" class="photo-thumb" data-photo-view aria-label="첨부한 사진 크게 보기"><img alt=""></button>
               <button type="button" class="plain-btn" data-photo-remove>첨부 해제</button>
             </div>
-          </div>
-          <div class="capture-footer">
-            <span class="shortcut">Ctrl / ⌘ + Enter</span>
-            <button type="submit" id="capture-submit" class="primary"><svg class="icon"><use href="#i-plus"/></svg>메모 저장</button>
+            <div class="capture-actions">
+              <div class="capture-hints">
+                <span class="photo-status" data-photo-status role="status"></span>
+                <span class="shortcut">Ctrl / ⌘ + Enter</span>
+              </div>
+              <div class="capture-buttons">
+                <button type="button" class="photo-add" data-photo-add><svg class="icon" aria-hidden="true"><use href="#i-photo"/></svg><span>사진 추가</span></button>
+                <button type="submit" id="capture-submit" class="primary"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>메모 저장</button>
+              </div>
+            </div>
           </div>
         </form>
       </section>

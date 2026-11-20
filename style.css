@@ -66,7 +66,11 @@ main { margin-left: var(--rail-width); }
 .capture-form textarea { display: block; width: 100%; min-height: 70px; max-height: 45vh; resize: vertical; border: 0; background: transparent; padding: 9px 0; font-size: 17px; line-height: 1.6; outline: none; }
 .capture-form textarea::placeholder, .search input::placeholder { color: var(--quiet); opacity: 1; }
 .capture-form textarea:focus-visible { outline: 0; }
-.capture-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid #edf0e8; padding-top: 12px; }
+.capture-footer { display: grid; gap: 12px; border-top: 1px solid #edf0e8; padding-top: 12px; }
+.capture-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+.capture-hints { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.capture-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-inline-start: auto; }
+.capture-buttons button { white-space: nowrap; }
 .photo-field { display: grid; gap: 7px; margin-block: 7px 12px; }
 .photo-controls, .photo-preview { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .photo-add { display: inline-flex; align-items: center; gap: 7px; min-height: 48px; padding: 7px 12px; border: 1px solid #c6d4c1; border-radius: 8px; background: #f0f3ea; color: var(--green-dark); font-size: 14px; font-weight: 750; }
@@ -80,7 +84,8 @@ dialog#photo-viewer { width: min(860px, calc(100% - 24px)); }
 #photo-viewer-image { display: block; height: auto; max-width: 100%; margin-inline: auto; border-radius: 6px; }
 .backup-parts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .backup-parts a { text-decoration: none; }
-#capture-submit { min-height: 56px; padding-inline: 21px; font-size: 15px; }
+.capture-buttons .photo-add, #capture-submit { min-height: 56px; padding-inline: 16px; font-size: 15px; }
+#capture-submit { padding-inline: 21px; }
 dialog.capture-categories { width: min(540px, calc(100% - 32px)); }
 .category-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 .category-heading h2 { font-size: clamp(19px, 4vw, 22px); line-height: 1.3; letter-spacing: -.03em; }
@@ -220,7 +225,9 @@ dialog textarea { resize: vertical; max-height: 46dvh; }
   .capture-form textarea { font-size: 16px; min-height: 63px; }
   dialog.capture-categories { position: fixed; inset: auto 0 0; width: 100%; max-width: none; max-height: 88dvh; margin: 0; padding: 15px 16px max(16px, env(safe-area-inset-bottom)); border-radius: 20px 20px 0 0; }
   .shortcut { display: none; }
-  .capture-footer { justify-content: flex-end; padding-top: 9px; }
+  .capture-footer { padding-top: 9px; }
+  .capture-actions { flex-direction: column; align-items: stretch; }
+  .capture-buttons .photo-add, #capture-submit { padding-inline: 12px; }
   .mobile-nav { display: flex !important; overflow-x: auto; gap: 7px; margin-top: 19px; padding: 4px 3px 7px; }
   .mobile-chip { flex: 0 0 auto; width: max-content; max-width: 15rem; min-height: 48px; background: var(--sheet); border-color: var(--line); gap: 4px; padding-inline: 13px; }
   .mobile-chip[aria-pressed="true"] { background: var(--tint); border-color: #bdd0b7; }
