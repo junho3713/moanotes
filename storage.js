@@ -85,9 +85,7 @@ export async function openCloud(config) {
   return {
     observeAuth: (next, error) => authSdk.onAuthStateChanged(auth, next, error),
     currentUser: () => auth.currentUser,
-    signIn: (email, password) => authSdk.signInWithEmailAndPassword(auth, email, password),
     signInWithGoogle: () => authSdk.signInWithPopup(auth, google),
-    signUp: (email, password) => authSdk.createUserWithEmailAndPassword(auth, email, password),
     sendVerification: (user) => authSdk.sendEmailVerification(user),
     async refreshVerification(user) {
       await authSdk.reload(user);

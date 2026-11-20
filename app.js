@@ -1,5 +1,5 @@
 import { firebaseConfig } from "./firebase-config.js";
-import { localStore, openCloud } from "./storage.js?v=14";
+import { localStore, openCloud } from "./storage.js?v=15";
 import { maxPhotoBytes, maxThumbnailBytes, photoParts, preparePhoto } from "./images.js?v=6";
 
 const byId = (id) => document.getElementById(id);
@@ -1118,9 +1118,10 @@ function resetWorkspaceSession() {
 }
 
 function showAccountScreen(screen, message) {
-  byId("auth-title").textContent = screen === "signup" ? "회원가입" : screen === "verify-email" ? "이메일 인증" : "내 메모";
+  byId("auth-title").textContent = screen === "verify-email" ? "이메일 인증" : "내 메모";
   byId("auth-caption").textContent = message;
-  for (const id of ["login", "signup", "verify-email"]) byId(id).hidden = id !== screen;
+  byId("login").hidden = screen !== "login";
+  byId("verify-email").hidden = screen !== "verify-email";
 }
 
 function accountError(error, fallback) {
@@ -1132,10 +1133,9 @@ function accountError(error, fallback) {
 function connectAccounts(cloud) {
   const caption = byId("auth-caption");
   const verificationStatus = byId("verification-status");
-  const resend = byId("resend-verification");
-  const login = byId("login");
-  const loginButtons = [...login.querySelectorAll("button")];
-  const loginPrompt = "로그인하면 폰과 PC에서 같은 메모를 볼 수 있어요.";
+  const send = byId("send-verification");
+  const googleLogin = byId("google-login");
+  const loginPrompt = "Google 계정으로 로그인하면 폰과 PC에서 같은 메모를 볼 수 있어요.";
   let session = 0;
   let activeUid;
 
@@ -1160,7 +1160,7 @@ function connectAccounts(cloud) {
       }
       if (attempt !== session) return false;
       if (!allowed) {
-        showAccountScreen("verify-email", "메일에서 인증 링크를 연 뒤 아래 버튼을 눌러 주세요.");
+        showAccountScreen("verify-email", "인증 메일을 보내고 링크를 연 뒤 ‘인증했어요’를 눌러 주세요.");
         return false;
       }
     }
@@ -1173,85 +1173,40 @@ function connectAccounts(cloud) {
   }
 
   async function sendVerification(user) {
-    if (!user || resend.disabled) return;
-    resend.disabled = true;
+    if (!user || send.disabled) return;
+    send.disabled = true;
     verificationStatus.textContent = "인증 메일을 보내는 중이에요.";
     let message;
     try {
       await cloud.sendVerification(user);
       message = "인증 메일을 보냈어요. 보이지 않으면 스팸함을 확인해 주세요.";
     } catch (error) {
-      message = accountError(error, "메일을 보내지 못했어요. 다시 보내기를 눌러 주세요.");
+      message = accountError(error, "메일을 보내지 못했어요. 잠시 후 다시 시도해 주세요.");
     } finally {
-      resend.disabled = false;
+      send.disabled = false;
     }
     if (cloud.currentUser()?.uid === user.uid) verificationStatus.textContent = message;
   }
 
-  byId("show-signup").addEventListener("click", () => {
-    byId("password").value = "";
-    byId("signup-email").value ||= byId("email").value;
-    showAccountScreen("signup", "인증 링크를 받을 이메일과 비밀번호를 입력해 주세요.");
-    byId("signup-email").focus();
-  });
-  byId("back-to-login").addEventListener("click", () => {
-    byId("signup-password").value = "";
-    showAccountScreen("login", loginPrompt);
-    byId("email").focus();
-  });
-
-  byId("google-login").addEventListener("click", async () => {
-    for (const button of loginButtons) button.disabled = true;
+  googleLogin.addEventListener("click", async () => {
+    googleLogin.disabled = true;
     caption.textContent = "Google 계정을 확인하는 중이에요.";
     try {
       await cloud.signInWithGoogle();
-      byId("password").value = "";
     } catch (error) {
       const messages = {
         "auth/popup-closed-by-user": "Google 로그인 창이 닫혔어요. 다시 시도해 주세요.",
         "auth/popup-blocked": "브라우저에서 팝업을 허용한 뒤 다시 눌러 주세요.",
-        "auth/account-exists-with-different-credential": "같은 이메일로 만든 계정이 있어요. 이메일과 비밀번호로 로그인해 주세요.",
-        "auth/unauthorized-domain": "이 주소에서는 Google 로그인을 사용할 수 없어요. 이메일로 로그인해 주세요.",
+        "auth/account-exists-with-different-credential": "기존 모아 계정에 연결하지 못했어요. 모아 문의처로 연락해 주세요.",
+        "auth/unauthorized-domain": "Google 로그인을 사용할 수 있는 모아 메모장 주소인지 확인해 주세요.",
       };
       caption.textContent = accountError(error, messages[error.code] ?? "Google 로그인에 실패했어요. 다시 시도해 주세요.");
     } finally {
-      for (const button of loginButtons) button.disabled = false;
+      googleLogin.disabled = false;
     }
   });
 
-  for (const id of ["login", "signup"]) {
-    const signup = id === "signup";
-    const form = byId(id);
-    const controls = signup ? [...form.querySelectorAll("button")] : loginButtons;
-    const email = byId(signup ? "signup-email" : "email");
-    const password = byId(signup ? "signup-password" : "password");
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      if (controls[0].disabled) return;
-      for (const button of controls) button.disabled = true;
-      caption.textContent = signup ? "계정을 만드는 중이에요." : "로그인하는 중이에요.";
-      try {
-        if (signup) {
-          const { user } = await cloud.signUp(email.value.trim(), password.value);
-          password.value = "";
-          await sendVerification(user);
-        } else {
-          await cloud.signIn(email.value.trim(), password.value);
-          password.value = "";
-        }
-      } catch (error) {
-        const message = error.code === "auth/weak-password" || error.code === "auth/password-does-not-meet-requirements"
-          ? "비밀번호를 더 길고 다양하게 만들어 주세요."
-          : signup ? "가입하지 못했어요. 이미 만든 계정이 있다면 로그인해 주세요."
-            : "이메일과 비밀번호를 확인해 주세요.";
-        caption.textContent = accountError(error, message);
-      } finally {
-        for (const button of controls) button.disabled = false;
-      }
-    });
-  }
-
-  resend.addEventListener("click", () => void sendVerification(cloud.currentUser()));
+  send.addEventListener("click", () => void sendVerification(cloud.currentUser()));
   byId("check-verification").addEventListener("click", async (event) => {
     const button = event.currentTarget;
     const user = cloud.currentUser();
