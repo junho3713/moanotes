@@ -1,5 +1,5 @@
 import { firebaseConfig } from "./firebase-config.js";
-import { createRelatedNotes } from "./related-notes.js?v=20";
+import { createRelatedNotes } from "./related-notes.js?v=21";
 import { localStore, openCloud } from "./storage.js?v=15";
 import { maxPhotoBytes, maxThumbnailBytes, photoParts, preparePhoto } from "./images.js?v=6";
 
@@ -230,7 +230,7 @@ function resetClassificationWorker() {
 
 function ensureClassificationWorker() {
   if (!classificationWorker) {
-    classificationWorker = new Worker(new URL("./classifier-worker.js?v=18", import.meta.url), { type: "module" });
+    classificationWorker = new Worker(new URL("./classifier-worker.js?v=21", import.meta.url), { type: "module" });
     classificationWorker.addEventListener("message", (event) => {
       if (event.data.type === "ready") {
         classifierReady = true;

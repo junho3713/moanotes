@@ -1,10 +1,14 @@
-import { relatedText, relatedCandidates } from "./semantic-search.js?v=18";
+import { relatedText, relatedCandidates, relatedReferenceScore } from "./semantic-search.js?v=21";
 
 export function createRelatedNotes({ root, toggle, queryInput, getNotes, getWorker, openNote, delay = 700 }) {
   const status = root.querySelector("[data-related-status]");
   const find = root.querySelector("[data-related-find]");
   const retry = root.querySelector("[data-related-retry]");
   const results = root.querySelector("[data-related-results]");
+  const more = root.querySelector("[data-related-more]");
+  const pageSize = 12;
+  let rankedMatches = [];
+  let visibleCount = 0;
   let enabled = false;
   let worker;
   let sequence = 0;
@@ -25,6 +29,9 @@ export function createRelatedNotes({ root, toggle, queryInput, getNotes, getWork
   function clearResults() {
     results.replaceChildren();
     results.hidden = true;
+    rankedMatches = [];
+    visibleCount = 0;
+    more.hidden = true;
   }
 
   function cancel() {
@@ -48,10 +55,11 @@ export function createRelatedNotes({ root, toggle, queryInput, getNotes, getWork
     say("관련 메모를 찾지 못했어요. 연결을 확인한 뒤 다시 시도해 주세요.");
   }
 
-  function draw(matches) {
-    clearResults();
+  function renderMatches() {
+    results.replaceChildren();
     const notes = new Map(getNotes().map((note) => [note.id, note]));
-    for (const { id } of matches.slice(0, 3)) {
+    const available = rankedMatches.filter(({ id }) => notes.has(id));
+    for (const { id, score } of available.slice(0, visibleCount)) {
       const note = notes.get(id);
       if (!note) continue;
       const item = document.createElement("li");
@@ -61,10 +69,17 @@ export function createRelatedNotes({ root, toggle, queryInput, getNotes, getWork
       const heading = document.createElement("span");
       heading.className = "related-note-title";
       heading.textContent = note.title || note.body.split(/\r?\n/u)[0] || "메모";
+      button.title = heading.textContent;
       const preview = document.createElement("span");
       preview.className = "related-note-preview";
       preview.textContent = note.body.slice(0, 180);
       button.append(heading, preview);
+      if (score < relatedReferenceScore) {
+        const reference = document.createElement("span");
+        reference.className = "related-note-reference";
+        reference.textContent = "참고 후보";
+        button.append(reference);
+      }
       button.addEventListener("click", () => {
         const current = getNotes().find((entry) => entry.id === id);
         if (current) openNote(current);
@@ -73,8 +88,25 @@ export function createRelatedNotes({ root, toggle, queryInput, getNotes, getWork
       results.append(item);
     }
     results.hidden = !results.children.length;
-    say(results.children.length ? "이전에 적어둔 생각과 연결해 보세요." : "지금 내용과 가까운 메모가 없어요.");
+    more.hidden = results.children.length >= available.length;
+    more.textContent = "더 보기 (" + Math.max(0, available.length - results.children.length) + "개 남음)";
+    say(available.length
+      ? "관련도순으로 " + results.children.length + "개 / 전체 " + available.length + "개 · 관련성이 낮은 메모는 참고 후보로 표시해요."
+      : "검색할 텍스트 메모가 없어요.");
   }
+
+  function draw(matches) {
+    rankedMatches = matches;
+    visibleCount = pageSize;
+    renderMatches();
+  }
+
+  more.addEventListener("click", () => {
+    const previousCount = results.children.length;
+    visibleCount += pageSize;
+    renderMatches();
+    results.children[previousCount]?.firstElementChild?.focus();
+  });
 
   function search() {
     timer = undefined;

@@ -24,6 +24,7 @@ test("semantic ranking and AI exploration lifecycle", () => {
     replaceChildren(...children) { this.children = children; }
     append(...children) { this.children.push(...children); }
     focus() { this.focused = true; }
+    get firstElementChild() { return this.children[0]; }
   }
   function clock() {
     let id = 0;
@@ -40,13 +41,17 @@ test("semantic ranking and AI exploration lifecycle", () => {
   assert(helpers.relatedText("", "x".repeat(2000)).length === 1000, "bounded text");
   const candidates = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "bad" }, { id: "invalid" }];
   const vectors = new Map([["a", { vector: [0.9, 0] }], ["b", { vector: [1, 0] }], ["c", { vector: [0.85, 0] }], ["bad", { vector: [0.2, 0] }], ["invalid", { vector: [NaN, 0] }]]);
-  same(helpers.rankRelated([1, 0], candidates, vectors).map(({ id }) => id), ["b", "a", "c"], "top three by similarity, weak/invalid results excluded");
-  same(helpers.rankRelated([0, 1], candidates, vectors), [], "no forced matches");
+  same(helpers.rankRelated([1, 0], candidates, vectors).map(({ id }) => id), ["b", "a", "c", "bad"], "all finite candidates ranked, weak scores retained");
+  same(helpers.rankRelated([0, 1], candidates, vectors).length, 4, "low similarity does not silently hide candidates");
+  same(helpers.rankRelated([1, 0], candidates, vectors, 2).map(({ id }) => id), ["b", "a"], "explicit limit still supported");
+  same(helpers.relatedText("AI 3D 픽셀 아트 툴", "https://www.fmkorea.com/10575282726\nhttps://github.com/siliconjungle/shapeshift-labs-ink-studio"), "AI 3D 픽셀 아트 툴", "URL-heavy note uses meaningful title");
+  assert(helpers.relatedCandidates([{ id: "tag", title: "픽셀 아트", tags: ["게임 개발"], body: "https://example.com" }])[0].text.includes("게임 개발"), "categories inform retrieval");
+  assert(helpers.relatedCandidates([{ id: "url", body: "https://example.com" }]).length === 1, "URL-only notes remain searchable");
   output.push("semantic ranking: limits, ordering, weak matches, empty text");
   
   const root = new Element();
-  const toggle = new Element(), status = new Element(), results = new Element(), retry = new Element(), find = new Element();
-  root.elements = { "[data-related-toggle]": toggle, "[data-related-status]": status, "[data-related-find]": find, "[data-related-retry]": retry, "[data-related-results]": results };
+  const toggle = new Element(), status = new Element(), results = new Element(), retry = new Element(), find = new Element(), more = new Element();
+  root.elements = { "[data-related-toggle]": toggle, "[data-related-status]": status, "[data-related-find]": find, "[data-related-retry]": retry, "[data-related-results]": results, "[data-related-more]": more };
   const query = new Element();
   const timers = clock();
   const sent = [];
@@ -54,7 +59,7 @@ test("semantic ranking and AI exploration lifecycle", () => {
   let opened;
   let calls = 0;
   const worker = { postMessage(data) { sent.push(data); } };
-  const makeController = new Function("relatedText", "relatedCandidates", "document", "setTimeout", "clearTimeout", controllerBody + "\nreturn createRelatedNotes;")(helpers.relatedText, helpers.relatedCandidates, { createElement: () => new Element() }, timers.setTimeout, timers.clearTimeout);
+  const makeController = new Function("relatedText", "relatedCandidates", "relatedReferenceScore", "document", "setTimeout", "clearTimeout", controllerBody + "\nreturn createRelatedNotes;")(helpers.relatedText, helpers.relatedCandidates, helpers.relatedReferenceScore, { createElement: () => new Element() }, timers.setTimeout, timers.clearTimeout);
   const controller = makeController({
     root, toggle, queryInput: query, getNotes: () => notes,
     getWorker: () => { calls++; return worker; }, openNote: (note) => { opened = note; },
@@ -108,7 +113,7 @@ test("semantic ranking and AI exploration lifecycle", () => {
   timers.run(700);
   const third = sent.filter((message) => message.task === "related").at(-1);
   controller.receive({ data: { task: "related", request: third.request, type: "result", matches: [] } });
-  assert(status.textContent.includes("가까운 메모가 없어요"), "empty match state");
+  assert(status.textContent.includes("검색할 텍스트 메모가 없어요"), "empty candidate state");
   controller.notesChanged();
   timers.run(700);
   let newest = sent.filter((message) => message.task === "related").at(-1);
@@ -148,6 +153,33 @@ test("semantic ranking and AI exploration lifecycle", () => {
   controller.receive({ data: { task: "related", request: newest.request, type: "result", matches: [{ id: "a" }] } });
   same(results.children.length, 0, "previous account results ignored");
   output.push("lifecycle: Korean input, no matches, edit/delete refresh, worker error/retry, timeout and account reset");
+  // More than three results remain reachable, even below the old 0.82 threshold.
+  notes = Array.from({ length: 26 }, (_, index) => ({
+    id: "page-" + index, title: index === 20 ? "AI 3D 픽셀 아트 툴" : "메모 " + index, body: "내용",
+  }));
+  controller.setVisible(true);
+  query.value = "게임 만들 때 도움이 될만한 것";
+  toggle.fire("click");
+  find.fire("click");
+  const pageRequest = sent.filter((message) => message.task === "related").at(-1);
+  controller.receive({ data: {
+    task: "related", request: pageRequest.request, type: "result",
+    matches: notes.map(({ id }, index) => ({ id, score: index < 12 ? 0.9 : 0.7 })),
+  } });
+  same(results.children.length, 12, "first page contains twelve compact cards");
+  assert(!more.hidden && status.textContent.includes("전체 26개"), "remaining candidates are discoverable");
+  more.fire("click");
+  same(results.children.length, 24, "More adds twelve results");
+  same(results.children[20].children[0].children[0].textContent, "AI 3D 픽셀 아트 툴", "lower-ranked target remains accessible");
+  assert(results.children[12].firstElementChild.focused, "More focuses the first newly revealed result");
+  same(results.children[20].children[0].children[2].textContent, "참고 후보", "lower scores labelled rather than hidden");
+  more.fire("click");
+  same(results.children.length, 26, "last page includes all remaining notes");
+  assert(more.hidden, "More disappears when all results are displayed");
+  query.fire("input");
+  assert(more.hidden && results.hidden, "input change clears pagination and stale results");
+  controller.reset();
+  output.push("pagination: twelve cards, all candidates, low-score labels and accessible More");
   return output;
 });
 

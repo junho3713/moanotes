@@ -8,8 +8,8 @@
   <meta name="description" content="모아에서 생각을 빠르게 기록하고, 주제로 모아보세요.">
   <title>모아 — 개인 메모장</title>
   <link rel="icon" href="./moa.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=20">
-  <script type="module" src="./app.js?v=20"></script>
+  <link rel="stylesheet" href="./style.css?v=21">
+  <script type="module" src="./app.js?v=21"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -127,6 +127,7 @@
           <p id="related-status" class="related-status" data-related-status role="status" aria-live="polite"></p>
           <button type="button" class="plain-btn" data-related-retry hidden>다시 찾기</button>
           <ul id="related-results" class="related-results" data-related-results aria-label="생각과 관련된 메모" hidden></ul>
+          <button type="button" class="soft-btn related-more" data-related-more aria-controls="related-results" hidden>더 보기</button>
         </section>
         <div id="selection" class="selection-bar" hidden>
           <span id="selected-count"></span>

@@ -1,4 +1,4 @@
-import { rankRelated } from "./semantic-search.js?v=18";
+import { rankRelated } from "./semantic-search.js?v=21";
 
 const libraryUrl = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1";
 const model = "Xenova/multilingual-e5-small";
