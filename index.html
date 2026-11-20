@@ -8,7 +8,7 @@
   <meta name="description" content="모아에서 생각을 빠르게 기록하고, 주제로 모아보세요.">
   <title>모아 — 개인 메모장</title>
   <link rel="icon" href="./moa.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=7">
+  <link rel="stylesheet" href="./style.css?v=8">
   <script type="module" src="./app.js?v=6"></script>
 </head>
 <body>
@@ -57,10 +57,8 @@
       <section class="capture" aria-labelledby="page-title">
         <h1 id="page-title">내 메모</h1>
         <form id="capture-form" class="capture-form">
-          <label for="capture-title">제목 <span class="field-optional">선택</span></label>
-          <input id="capture-title" class="capture-title" type="text" maxlength="120" placeholder="메모 제목">
-          <label for="capture-body">내용</label>
-          <textarea id="capture-body" rows="2" maxlength="20000" placeholder="떠오르는 생각을 적어보세요"></textarea>
+          <input id="capture-title" class="capture-title" type="text" maxlength="120" aria-label="메모 제목 (선택)" placeholder="메모 제목">
+          <textarea id="capture-body" rows="6" maxlength="20000" aria-label="메모 내용" placeholder="떠오르는 생각을 적어보세요"></textarea>
           <div class="capture-footer" id="capture-photo">
             <input type="file" accept="image/*" data-photo-file hidden>
             <div class="photo-preview" data-photo-preview hidden>
