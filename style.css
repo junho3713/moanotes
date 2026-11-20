@@ -67,6 +67,19 @@ main { margin-left: var(--rail-width); }
 .capture-form textarea::placeholder, .search input::placeholder { color: var(--quiet); opacity: 1; }
 .capture-form textarea:focus-visible { outline: 0; }
 .capture-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid #edf0e8; padding-top: 12px; }
+.photo-field { display: grid; gap: 7px; margin-block: 7px 12px; }
+.photo-controls, .photo-preview { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.photo-add { display: inline-flex; align-items: center; gap: 7px; min-height: 48px; padding: 7px 12px; border: 1px solid #c6d4c1; border-radius: 8px; background: #f0f3ea; color: var(--green-dark); font-size: 14px; font-weight: 750; }
+.photo-add:hover { background: var(--tint); }
+.photo-status { color: var(--muted); font-size: 13px; }
+.photo-status[data-tone="warn"] { color: var(--error); }
+.photo-thumb { display: block; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--rail); }
+.photo-thumb img { display: block; width: auto; height: auto; max-width: 160px; max-height: 105px; }
+.photo-preview .plain-btn { min-height: 44px; }
+dialog#photo-viewer { width: min(860px, calc(100% - 24px)); }
+#photo-viewer-image { display: block; height: auto; max-width: 100%; margin-inline: auto; border-radius: 6px; }
+.backup-parts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.backup-parts a { text-decoration: none; }
 #capture-submit { min-height: 56px; padding-inline: 21px; font-size: 15px; }
 dialog.capture-categories { width: min(540px, calc(100% - 32px)); }
 .category-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
@@ -141,6 +154,7 @@ dialog.capture-categories { width: min(540px, calc(100% - 32px)); }
 .note-title, .note-snippet { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; white-space: pre-wrap; }
 .note-title { font-size: 16px; font-weight: 800; line-height: 1.5; -webkit-line-clamp: 2; }
 .note-snippet { color: var(--muted); margin-top: 4px; font-size: 14px; line-height: 1.5; -webkit-line-clamp: 2; }
+.note-photo { display: block; width: 100%; height: 115px; margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--rail); object-fit: contain; }
 .note-check { width: 20px; height: 20px; margin: 0 4px 0 0; accent-color: var(--green); cursor: pointer; }
 .note-foot { flex-wrap: wrap; margin-top: auto; padding-top: 8px; }
 .chip, .tag-edit, .mobile-chip { align-items: center; display: inline-flex; min-height: 29px; border-radius: 999px; border: 1px solid transparent; padding: 3px 9px; font-size: 12px; font-weight: 720; max-width: 100%; overflow-wrap: anywhere; }

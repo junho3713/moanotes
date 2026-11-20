@@ -1,4 +1,7 @@
+import { maxPhotoBytes, photoParts } from "./images.js?v=6";
+
 const demoKey = "moa.demo.notes.v1";
+const localPhoto = (image) => ({ thumbnail: image?.thumbnail ?? "", imageData: image?.data ?? "" });
 const demoRows = [
   ["카페 홈페이지에 예약 기능 넣기", "첫 화면에서 시간대를 고를 수 있게. 예약 확인은 문자로 보내는 방식도 살펴보기.", ["웹사이트", "아이디어"], false],
   ["마음에 드는 웹사이트 모아보기", "여백이 넉넉하고 글을 읽기 편한 곳 위주로 저장해 두기.", ["웹사이트", "자료"], true],
@@ -41,12 +44,16 @@ export function localStore(onChange, onError) {
   });
   refresh();
   return {
-    async add(note) {
+    async add(note, image) {
       const id = crypto.randomUUID();
-      write((items) => [...items, { ...note, id }]);
+      write((items) => [...items, { ...note, ...(image ? localPhoto(image) : {}), id }]);
       return id;
     },
-    async update(id, patch) { write((items) => items.map((note) => note.id === id ? { ...note, ...patch } : note)); },
+    async update(id, patch, image) {
+      const attachment = image === undefined ? {} : localPhoto(image);
+      write((items) => items.map((note) => note.id === id ? { ...note, ...patch, ...attachment } : note));
+    },
+    async getPhoto(id) { return read().find((note) => note.id === id)?.imageData ?? ""; },
     async remove(id) { write((items) => items.filter((note) => note.id !== id)); },
     async removeMany(ids) {
       const targets = new Set(ids);
@@ -78,24 +85,62 @@ export async function openCloud(config) {
     signOut: () => authSdk.signOut(auth),
     getStore(uid, onChange, onError) {
       const collection = dbSdk.collection(db, "users", uid, "notes");
+      const images = dbSdk.collection(db, "users", uid, "noteImages");
       const ref = (id) => dbSdk.doc(collection, id);
+      const photoRef = (id) => dbSdk.doc(images, id);
+      function writePhoto(batch, id, url) {
+        const image = photoParts(url, maxPhotoBytes);
+        if (!image) throw new Error("Invalid photo");
+        batch.set(photoRef(id), { mime: image.mime, data: dbSdk.Bytes.fromBase64String(image.base64) });
+      }
+      async function removeMany(ids) {
+        let deletedCount = 0;
+        try {
+          for (let start = 0; start < ids.length; start += 200) {
+            const group = ids.slice(start, start + 200);
+            const batch = dbSdk.writeBatch(db);
+            for (const id of group) {
+              batch.delete(ref(id));
+              batch.delete(photoRef(id));
+            }
+            await batch.commit();
+            deletedCount += group.length;
+          }
+        } catch (error) {
+          if (!deletedCount) throw error;
+          throw Object.assign(new Error("Partial deletion", { cause: error }), { deletedCount });
+        }
+      }
       const disconnect = dbSdk.onSnapshot(collection, { includeMetadataChanges: true }, (snapshot) => {
         const notes = snapshot.docs.map((item) => ({ ...item.data(), id: item.id }));
         onChange(notes, snapshot.metadata);
       }, onError);
       return {
         disconnect,
-        async add(note) {
-          const created = await dbSdk.addDoc(collection, note);
+        async add(note, image) {
+          if (!image) return (await dbSdk.addDoc(collection, note)).id;
+          const created = dbSdk.doc(collection);
+          const batch = dbSdk.writeBatch(db);
+          batch.set(created, { ...note, thumbnail: image.thumbnail });
+          writePhoto(batch, created.id, image.data);
+          await batch.commit();
           return created.id;
         },
-        update: (id, patch) => dbSdk.updateDoc(ref(id), patch),
-        remove: (id) => dbSdk.deleteDoc(ref(id)),
-        async removeMany(ids) {
+        async update(id, patch, image) {
+          if (image === undefined) return dbSdk.updateDoc(ref(id), patch);
           const batch = dbSdk.writeBatch(db);
-          for (const id of ids) batch.delete(ref(id));
+          batch.update(ref(id), { ...patch, thumbnail: image?.thumbnail ?? "" });
+          if (image) writePhoto(batch, id, image.data);
+          else batch.delete(photoRef(id));
           await batch.commit();
         },
+        async getPhoto(id) {
+          const photo = (await dbSdk.getDoc(photoRef(id))).data();
+          if (!photo || !["image/webp", "image/jpeg"].includes(photo.mime)) return "";
+          return "data:" + photo.mime + ";base64," + photo.data.toBase64();
+        },
+        remove: (id) => removeMany([id]),
+        removeMany,
         async addTags(ids, tags, updatedAt) {
           const batch = dbSdk.writeBatch(db);
           for (const id of ids) {
@@ -105,7 +150,11 @@ export async function openCloud(config) {
         },
         async importNotes(rows) {
           const batch = dbSdk.writeBatch(db);
-          for (const note of rows) batch.set(dbSdk.doc(collection), note);
+          for (const { imageData, ...note } of rows) {
+            const created = dbSdk.doc(collection);
+            batch.set(created, note);
+            if (imageData) writePhoto(batch, created.id, imageData);
+          }
           await batch.commit();
         },
       };

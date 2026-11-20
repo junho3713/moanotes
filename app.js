@@ -1,10 +1,12 @@
 import { firebaseConfig } from "./firebase-config.js";
-import { localStore, openCloud } from "./storage.js?v=3";
+import { localStore, openCloud } from "./storage.js?v=6";
+import { maxPhotoBytes, maxThumbnailBytes, photoParts, preparePhoto } from "./images.js?v=6";
 
 const byId = (id) => document.getElementById(id);
 const maxTags = 20;
 const maxBatch = 400;
 const maxTitleLength = 120;
+const maxBackupBytes = 32 * 1024 * 1024;
 const state = {
   notes: [], view: "all", query: "", oldestFirst: false,
   selecting: false, selected: new Set(), store: null,
@@ -21,9 +23,12 @@ const dateLabel = new Intl.DateTimeFormat("ko-KR", { year: "2-digit", month: "lo
 const noteDate = new Intl.DateTimeFormat("ko-KR", { year: "2-digit", month: "numeric", day: "numeric" });
 const fullDate = new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short" });
 let toastTimer;
-let lastFocus = null;
+const dialogFocus = new WeakMap();
 let capturePending = false;
 let batchDeleteIds = [];
+let photoViewerRequest = 0;
+let backupRequest = 0;
+const backupUrls = [];
 
 function node(name, className, content) {
   const item = document.createElement(name);
@@ -286,7 +291,7 @@ function visibleNotes() {
   const terms = normalize(state.query).split(/\s+/u).filter(Boolean);
   return state.notes.filter((note) => {
     if (!matchesView(note)) return false;
-    const haystack = normalize([note.title, note.body, ...note.tags].join(" "));
+    const haystack = normalize([note.title, note.body, note.thumbnail ? "사진" : "", ...note.tags].join(" "));
     return terms.every((term) => haystack.includes(term));
   }).sort((a, b) => (state.oldestFirst ? a.createdAt - b.createdAt : b.createdAt - a.createdAt)
     || a.id.localeCompare(b.id));
@@ -301,7 +306,7 @@ function drawNote(note) {
   date.dateTime = new Date(note.createdAt).toISOString();
   date.title = fullDate.format(note.createdAt);
   const [firstLine, ...rest] = note.body.split(/\r?\n/u);
-  const title = note.title || firstLine;
+  const title = note.title || firstLine || "사진 메모";
   if (state.selecting) {
     const check = node("input", "note-check");
     check.type = "checkbox";
@@ -330,6 +335,14 @@ function drawNote(note) {
   content.append(node("span", "note-title", title));
   const preview = (note.title ? note.body : rest.join("\n")).trim();
   if (preview) content.append(node("span", "note-snippet", preview));
+  if (photoParts(note.thumbnail, maxThumbnailBytes)) {
+    const image = node("img", "note-photo");
+    image.alt = "";
+    image.loading = "lazy";
+    image.decoding = "async";
+    image.src = note.thumbnail;
+    content.append(image);
+  }
   const foot = node("div", "note-foot");
   for (const tag of note.tags) foot.append(button("chip " + palette(tag), tag, () => chooseView("tag:" + tag)));
   const edit = button("tag-edit", undefined, () => showTags([note.id]));
@@ -388,7 +401,8 @@ async function save(action, form, errorDialog = form?.closest("dialog")) {
     await action();
     return true;
   } catch (error) {
-    const message = error.message === "offline" ? "인터넷 연결을 확인해 주세요."
+    const message = error.deletedCount ? "메모 " + error.deletedCount + "개를 삭제했어요. 창을 닫고 남은 메모를 다시 선택해 주세요."
+      : error.message === "offline" ? "인터넷 연결을 확인해 주세요."
       : error.code === "permission-denied" ? "이 계정의 메모 저장 권한을 확인해 주세요."
       : "저장하지 못했어요. 잠시 후 다시 시도해 주세요.";
     if (errorDialog) announce(message, errorDialog);
@@ -413,14 +427,122 @@ function announce(message, dialog) {
 function openDialog(id) {
   const dialog = byId(id);
   dialog.querySelector(".dialog-feedback")?.remove();
-  lastFocus = document.activeElement;
+  dialogFocus.set(dialog, document.activeElement);
   dialog.showModal();
 }
+
+function createPhotoField(id, onChange = () => {}) {
+  const field = byId(id);
+  const find = (name) => field.querySelector("[data-photo-" + name + "]");
+  const fileInput = find("file");
+  const add = find("add");
+  const preview = find("preview");
+  const view = find("view");
+  const image = view.querySelector("img");
+  const remove = find("remove");
+  const status = find("status");
+  let pending = false;
+  let attachment = null;
+  let changed = false;
+  let request = 0;
+
+  function draw(error) {
+    add.querySelector("span").textContent = attachment ? "사진 바꾸기" : "사진 추가";
+    add.disabled = pending;
+    view.disabled = pending;
+    remove.disabled = pending;
+    preview.hidden = !attachment;
+    if (attachment) image.src = attachment.thumbnail;
+    else image.removeAttribute("src");
+    status.textContent = error || (pending ? "사진을 줄이는 중이에요." : attachment
+      ? (attachment.size ? "압축 후 약 " + Math.ceil(attachment.size / 1024) + "KB" : "사진 1장")
+      : id === "capture-photo" ? "캡처를 붙여넣을 수도 있어요." : "");
+    status.dataset.tone = error ? "warn" : "";
+    onChange(pending);
+  }
+
+  async function choose(file) {
+    if (!file || add.disabled) return;
+    const attempt = ++request;
+    pending = true;
+    draw();
+    let error;
+    try {
+      const ready = await preparePhoto(file);
+      if (request !== attempt) return;
+      attachment = ready;
+      changed = true;
+    } catch (failure) {
+      error = failure instanceof Error
+        ? failure.message : "사진을 준비하지 못했어요. 다른 사진을 골라 주세요.";
+    }
+    if (request !== attempt) return;
+    pending = false;
+    draw(error);
+  }
+
+  add.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files[0];
+    fileInput.value = "";
+    void choose(file);
+  });
+  remove.addEventListener("click", () => {
+    attachment = null;
+    changed = true;
+    draw();
+    add.focus({ preventScroll: true });
+  });
+  view.addEventListener("click", () => {
+    if (attachment) void showPhoto(attachment);
+  });
+  return {
+    choose,
+    get attachment() { return attachment; },
+    get pending() { return pending; },
+    get change() { return changed ? attachment : undefined; },
+    reset(photo = null) {
+      request += 1;
+      pending = false;
+      attachment = photo;
+      changed = false;
+      draw();
+    },
+  };
+}
+
+async function showPhoto(attachment) {
+  const request = ++photoViewerRequest;
+  const dialog = byId("photo-viewer");
+  const image = byId("photo-viewer-image");
+  const status = byId("photo-viewer-status");
+  status.textContent = "사진을 불러오는 중이에요.";
+  status.hidden = false;
+  image.hidden = true;
+  image.removeAttribute("src");
+  openDialog("photo-viewer");
+  try {
+    const data = attachment.data || await state.store?.getPhoto(attachment.id);
+    if (request !== photoViewerRequest || !dialog.open) return;
+    if (!photoParts(data, maxPhotoBytes)) throw new Error("Photo unavailable");
+    image.src = data;
+    image.hidden = false;
+    status.hidden = true;
+  } catch {
+    if (request === photoViewerRequest && dialog.open) status.textContent = "사진을 불러오지 못했어요. 연결을 확인하고 다시 열어 주세요.";
+  }
+}
+
+const capturePhoto = createPhotoField("capture-photo", () => updateCaptureButton());
+const editPhoto = createPhotoField("edit-photo", (pending) => {
+  byId("editor-form").querySelector("button[type='submit']").disabled = pending;
+});
 
 function showEditor(note) {
   state.editingId = note.id;
   byId("edit-title").value = note.title ?? "";
   byId("edit-body").value = note.body;
+  editPhoto.reset(photoParts(note.thumbnail, maxThumbnailBytes) ? { id: note.id, thumbnail: note.thumbnail } : null);
   byId("delete-confirm").hidden = true;
   openDialog("editor");
   byId("edit-body").focus();
@@ -467,36 +589,113 @@ function noteData(body, title) {
   return { title, body, tags: [], pinned: false, createdAt: now, updatedAt: now };
 }
 
-function exportNotes() {
-  const notes = state.notes.map(({ id, ...note }) => note);
-  const file = new Blob([JSON.stringify({ version: 1, notes }, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(file);
-  const link = node("a");
-  link.href = url;
-  link.download = "moa-backup-" + new Date().toISOString().slice(0, 10) + ".json";
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 3000);
+function clearBackupParts() {
+  for (const url of backupUrls.splice(0)) URL.revokeObjectURL(url);
+  byId("backup-parts").replaceChildren();
+  byId("backup-parts").hidden = true;
+}
+
+function setBackupBusy(busy) {
+  byId("download").disabled = busy;
+  byId("download").textContent = busy ? "백업 준비 중…" : "백업 내려받기";
+  byId("upload").disabled = busy;
+}
+
+async function exportNotes() {
+  const store = state.store;
+  if (!store) return;
+  const request = ++backupRequest;
+  const dialog = byId("backup-dialog");
+  dialog.querySelector(".dialog-feedback")?.remove();
+  clearBackupParts();
+  setBackupBusy(true);
+  try {
+    const bundles = [];
+    let entries = [];
+    let bytes = 64;
+    const bundle = () => new Blob(['{"version":2,"notes":[', entries.join(","), "]}"], { type: "application/json" });
+    for (const { id, imageData, ...note } of state.notes) {
+      if (note.thumbnail) {
+        const data = await store.getPhoto(id);
+        if (request !== backupRequest) return;
+        if (!photoParts(data, maxPhotoBytes)) throw new Error("사진을 가져오지 못했어요. 연결을 확인하고 다시 시도해 주세요.");
+        note.imageData = data;
+      }
+      const entry = JSON.stringify(note);
+      const size = new Blob([entry]).size + 1;
+      if (bytes + size > maxBackupBytes && entries.length) {
+        bundles.push(bundle());
+        entries = [];
+        bytes = 64;
+      }
+      entries.push(entry);
+      bytes += size;
+    }
+    bundles.push(bundle());
+    const links = bundles.map((file, index) => {
+      const link = node("a", "soft-btn", "파일 " + (index + 1) + " 내려받기");
+      link.href = URL.createObjectURL(file);
+      link.download = "moa-backup-" + new Date().toISOString().slice(0, 10)
+        + (bundles.length > 1 ? "-" + (index + 1) : "") + ".json";
+      return link;
+    });
+    if (links.length === 1) {
+      const [link] = links;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 3000);
+    } else {
+      const parts = byId("backup-parts");
+      parts.append(node("p", "dialog-copy", "백업을 " + links.length + "개로 나눴어요. 각 파일을 내려받아 주세요."), ...links);
+      parts.hidden = false;
+      backupUrls.push(...links.map(({ href }) => href));
+    }
+  } catch {
+    if (request === backupRequest) announce("백업을 만들지 못했어요. 사진을 불러올 수 있도록 연결을 확인해 주세요.", dialog);
+  } finally {
+    if (request === backupRequest) setBackupBusy(false);
+  }
 }
 
 function fingerprint(note) {
-  return String(note.createdAt) + ":" + note.body;
+  return String(note.createdAt) + ":" + JSON.stringify([note.body.trim(), note.thumbnail || ""]);
 }
 
 function validateNote(note) {
   const validDate = (value) => Number.isSafeInteger(value) && value > 0 && value < 8.64e15;
-  return note && typeof note.body === "string" && note.body.trim() && note.body.length <= 20000
+  if (!note || typeof note.body !== "string") return false;
+  const thumbnail = note.thumbnail ?? "";
+  const data = note.imageData ?? "";
+  const hasPhoto = thumbnail !== "" || data !== "";
+  return (note.body.trim() || hasPhoto) && note.body.length <= 20000
+    && (!hasPhoto || (photoParts(thumbnail, maxThumbnailBytes) && photoParts(data, maxPhotoBytes)))
     && (!Object.hasOwn(note, "title") || (typeof note.title === "string" && note.title.length <= maxTitleLength))
     && Array.isArray(note.tags) && note.tags.length <= maxTags
     && note.tags.every((tag) => typeof tag === "string" && tag.trim() && tag.length <= 20)
     && typeof note.pinned === "boolean" && validDate(note.createdAt) && validDate(note.updatedAt);
 }
 
+function nextRestoreBatch(notes, start) {
+  const batch = [];
+  let bytes = 0;
+  let writes = 0;
+  for (let index = start; index < notes.length; index += 1) {
+    const note = notes[index];
+    const cost = note.imageData ? 2 : 1;
+    const estimated = new Blob([JSON.stringify(note)]).size + 512;
+    if (writes + cost > maxBatch || bytes + estimated > 6 * 1024 * 1024) break;
+    batch.push(note);
+    writes += cost;
+    bytes += estimated;
+  }
+  return batch;
+}
+
 async function importNotes(file) {
   const dialog = byId("backup-dialog");
   try {
-    if (file.size > 32 * 1024 * 1024) throw new Error("백업 파일은 32MB까지 가져올 수 있어요.");
+    if (file.size > maxBackupBytes) throw new Error("백업 파일은 32MB까지 가져올 수 있어요.");
     const backup = JSON.parse(await file.text());
-    if (backup?.version !== 1 || !Array.isArray(backup.notes) || !backup.notes.every(validateNote)) {
+    if (![1, 2].includes(backup?.version) || !Array.isArray(backup.notes) || !backup.notes.every(validateNote)) {
       throw new Error("모아에서 내려받은 백업 파일을 선택해 주세요.");
     }
     const known = new Set(state.notes.map(fingerprint));
@@ -509,6 +708,7 @@ async function importNotes(file) {
         title: note.title?.trim() ?? "",
         body: note.body.trim(), tags: [...new Set(note.tags.map((tag) => tag.trim()))],
         pinned: note.pinned, createdAt: note.createdAt, updatedAt: note.updatedAt,
+        ...(note.thumbnail ? { thumbnail: note.thumbnail, imageData: note.imageData } : {}),
       });
     }
     let imported = 0;
@@ -516,7 +716,7 @@ async function importNotes(file) {
     if (firebaseConfig && !navigator.onLine) throw new Error("인터넷 연결을 확인해 주세요.");
     try {
       while (imported < fresh.length) {
-        const batch = fresh.slice(imported, imported + maxBatch);
+        const batch = nextRestoreBatch(fresh, imported);
         await state.store.importNotes(batch);
         imported += batch.length;
       }
@@ -532,8 +732,21 @@ async function importNotes(file) {
 }
 
 function updateCaptureButton() {
-  byId("capture-submit").disabled = capturePending || !state.store || !byId("capture-body").value.trim();
+  byId("capture-submit").disabled = capturePending || capturePhoto.pending || !state.store
+    || (!byId("capture-body").value.trim() && !capturePhoto.attachment);
 }
+
+document.addEventListener("paste", (event) => {
+  if (byId("workspace").hidden) return;
+  const file = [...(event.clipboardData?.items ?? [])]
+    .find((item) => item.kind === "file" && item.type.startsWith("image/"))?.getAsFile();
+  if (!file) return;
+  const dialog = [...document.querySelectorAll("dialog[open]")];
+  const photo = !dialog.length ? capturePhoto : dialog.length === 1 && dialog[0].id === "editor" ? editPhoto : null;
+  if (!photo) return;
+  event.preventDefault();
+  void photo.choose(file);
+});
 
 byId("today").textContent = dateLabel.format(new Date());
 byId("capture-body").addEventListener("input", updateCaptureButton);
@@ -550,15 +763,17 @@ byId("capture-form").addEventListener("submit", async (event) => {
   const titleDraft = titleInput.value;
   const draft = input.value;
   const body = draft.trim();
-  if (!body || byId("capture-submit").disabled) return;
+  const photo = capturePhoto.attachment;
+  if ((!body && !photo) || byId("capture-submit").disabled) return;
   capturePending = true;
   const store = state.store;
   let id;
-  const saved = await save(async () => { id = await store.add(noteData(body, titleDraft.trim())); }, event.currentTarget);
+  const saved = await save(async () => { id = await store.add(noteData(body, titleDraft.trim()), photo); }, event.currentTarget);
   capturePending = false;
   if (saved && state.store === store) {
     if (input.value === draft) input.value = "";
     if (titleInput.value === titleDraft) titleInput.value = "";
+    capturePhoto.reset();
     showNewCategoryForm(false);
     state.recentCapture = {
       id, multiple: false, selected: new Set(), newCategories: [], saving: false, expanded: false,
@@ -686,11 +901,12 @@ byId("editor-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const title = byId("edit-title").value.trim();
   const body = byId("edit-body").value.trim();
-  if (!body) {
-    announce("메모 내용을 입력해 주세요.", byId("editor"));
+  if (editPhoto.pending || event.currentTarget.querySelector("button[type='submit']").disabled) return;
+  if (!body && !editPhoto.attachment) {
+    announce("내용을 적거나 사진을 추가해 주세요.", byId("editor"));
     return;
   }
-  if (await save(() => state.store.update(state.editingId, { title, body, updatedAt: Date.now() }), event.currentTarget)) {
+  if (await save(() => state.store.update(state.editingId, { title, body, updatedAt: Date.now() }, editPhoto.change), event.currentTarget)) {
     byId("editor").close();
     toast("메모를 수정했어요.");
   }
@@ -721,9 +937,26 @@ byId("backup-file").addEventListener("change", async (event) => {
   byId("upload").disabled = true;
   try { await importNotes(file); } finally { byId("upload").disabled = false; }
 });
+byId("photo-viewer-image").addEventListener("error", () => {
+  byId("photo-viewer-image").hidden = true;
+  const status = byId("photo-viewer-status");
+  status.textContent = "이 사진을 표시할 수 없어요.";
+  status.hidden = false;
+});
+byId("photo-viewer").addEventListener("close", () => {
+  photoViewerRequest += 1;
+  byId("photo-viewer-image").removeAttribute("src");
+});
+byId("editor").addEventListener("close", () => editPhoto.reset());
+byId("backup-dialog").addEventListener("close", () => {
+  backupRequest += 1;
+  setBackupBusy(false);
+  clearBackupParts();
+});
 for (const dialog of document.querySelectorAll("dialog")) {
   dialog.querySelector("[data-close]")?.addEventListener("click", () => dialog.close());
   dialog.addEventListener("close", () => {
+    const lastFocus = dialogFocus.get(dialog);
     if (lastFocus?.isConnected) lastFocus.focus();
     else if (lastFocus?.dataset.focusKey) {
       document.querySelector("[data-focus-key='" + CSS.escape(lastFocus.dataset.focusKey) + "']")?.focus();
@@ -801,6 +1034,8 @@ async function start() {
       byId("search").value = "";
       byId("capture-body").value = "";
       byId("capture-title").value = "";
+      capturePhoto.reset();
+      editPhoto.reset();
       updateCaptureButton();
       for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
       if (!user) {
@@ -819,5 +1054,6 @@ async function start() {
   }
 }
 
-updateCaptureButton();
+capturePhoto.reset();
+editPhoto.reset();
 void start();

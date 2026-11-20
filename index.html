@@ -8,8 +8,8 @@
   <meta name="description" content="모아에서 생각을 빠르게 기록하고, 주제로 모아보세요.">
   <title>모아 — 개인 메모장</title>
   <link rel="icon" href="./moa.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=5">
-  <script type="module" src="./app.js?v=4"></script>
+  <link rel="stylesheet" href="./style.css?v=6">
+  <script type="module" src="./app.js?v=6"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -26,6 +26,7 @@
     <symbol id="i-sort" viewBox="0 0 24 24"><path d="M5 7h14M8 12h8m-5 5h2"/></symbol>
     <symbol id="i-select" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 3 3 5-6"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M7 7l1 13h8l1-13M9 7V4h6v3"/></symbol>
+    <symbol id="i-photo" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="m4 17 4.5-4 3.5 3 4.5-5 4 4"/></symbol>
   </svg>
 
   <aside class="rail" aria-label="메모 보관함">
@@ -60,6 +61,17 @@
           <input id="capture-title" class="capture-title" type="text" maxlength="120" placeholder="메모 제목">
           <label for="capture-body">내용</label>
           <textarea id="capture-body" rows="2" maxlength="20000" placeholder="떠오르는 생각을 적어보세요"></textarea>
+          <div class="photo-field" id="capture-photo">
+            <input type="file" accept="image/*" data-photo-file hidden>
+            <div class="photo-controls">
+              <button type="button" class="photo-add" data-photo-add><svg class="icon" aria-hidden="true"><use href="#i-photo"/></svg><span>사진 추가</span></button>
+              <span class="photo-status" data-photo-status role="status"></span>
+            </div>
+            <div class="photo-preview" data-photo-preview hidden>
+              <button type="button" class="photo-thumb" data-photo-view aria-label="첨부한 사진 크게 보기"><img alt=""></button>
+              <button type="button" class="plain-btn" data-photo-remove>첨부 해제</button>
+            </div>
+          </div>
           <div class="capture-footer">
             <span class="shortcut">Ctrl / ⌘ + Enter</span>
             <button type="submit" id="capture-submit" class="primary"><svg class="icon"><use href="#i-plus"/></svg>메모 저장</button>
@@ -140,7 +152,18 @@
       <label for="edit-title">제목 <span class="field-optional">선택</span></label>
       <input type="text" id="edit-title" class="edit-title" maxlength="120" placeholder="메모 제목">
       <label for="edit-body">내용</label>
-      <textarea id="edit-body" rows="8" maxlength="20000" required></textarea>
+      <textarea id="edit-body" rows="6" maxlength="20000"></textarea>
+      <div class="photo-field" id="edit-photo">
+        <input type="file" accept="image/*" data-photo-file hidden>
+        <div class="photo-controls">
+          <button type="button" class="photo-add" data-photo-add><svg class="icon" aria-hidden="true"><use href="#i-photo"/></svg><span>사진 추가</span></button>
+          <span class="photo-status" data-photo-status role="status"></span>
+        </div>
+        <div class="photo-preview" data-photo-preview hidden>
+          <button type="button" class="photo-thumb" data-photo-view aria-label="첨부한 사진 크게 보기"><img alt=""></button>
+          <button type="button" class="plain-btn" data-photo-remove>첨부 해제</button>
+        </div>
+      </div>
       <div class="dialog-actions">
         <button type="button" id="delete-note" class="danger"><svg class="icon"><use href="#i-trash"/></svg>삭제</button>
         <button type="submit" class="primary">저장</button>
@@ -149,6 +172,15 @@
         <p>이 메모를 삭제할까요?</p><button type="button" id="cancel-delete" class="plain-btn">취소</button><button type="button" id="confirm-delete" class="danger">메모 삭제</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="photo-viewer" aria-labelledby="photo-viewer-title">
+    <div class="dialog-head">
+      <h2 id="photo-viewer-title">메모 사진</h2>
+      <button type="button" class="icon-btn" data-close aria-label="닫기"><svg class="icon"><use href="#i-close"/></svg></button>
+    </div>
+    <p id="photo-viewer-status" class="dialog-copy" role="status" hidden></p>
+    <img id="photo-viewer-image" alt="메모에 첨부한 사진" hidden>
   </dialog>
 
   <dialog id="batch-delete-dialog" aria-labelledby="batch-delete-title" aria-describedby="batch-delete-copy">
@@ -186,12 +218,13 @@
       <h2 id="backup-title">백업 및 가져오기</h2>
       <button type="button" class="icon-btn" data-close aria-label="닫기"><svg class="icon"><use href="#i-close"/></svg></button>
     </div>
-    <p class="dialog-copy">현재 메모를 JSON 파일로 내려받거나, 모아에서 만든 백업 파일의 메모를 추가할 수 있어요.</p>
+    <p class="dialog-copy">메모와 첨부 사진을 JSON 파일로 내려받거나, 모아에서 만든 백업 파일을 가져올 수 있어요.</p>
     <div class="backup-actions">
       <button type="button" class="primary" id="download">백업 내려받기</button>
       <button type="button" class="soft-btn" id="upload">파일 가져오기</button>
       <input type="file" id="backup-file" accept=".json,application/json" hidden>
     </div>
+    <div class="backup-parts" id="backup-parts" hidden></div>
   </dialog>
 
   <p class="toast" id="toast" role="status" aria-live="polite" hidden></p>
