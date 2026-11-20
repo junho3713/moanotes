@@ -1,5 +1,5 @@
 import { firebaseConfig } from "./firebase-config.js";
-import { createRelatedNotes } from "./related-notes.js?v=18";
+import { createRelatedNotes } from "./related-notes.js?v=19";
 import { localStore, openCloud } from "./storage.js?v=15";
 import { maxPhotoBytes, maxThumbnailBytes, photoParts, preparePhoto } from "./images.js?v=6";
 
@@ -52,8 +52,8 @@ let backupRequest = 0;
 const backupUrls = [];
 const relatedNotes = createRelatedNotes({
   root: byId("related-notes"),
-  titleInput: byId("capture-title"),
-  bodyInput: byId("capture-body"),
+  toggle: byId("ai-explore"),
+  queryInput: byId("related-query"),
   getNotes: () => state.notes,
   getWorker: ensureClassificationWorker,
   openNote: showEditor,
@@ -118,11 +118,17 @@ function showPanel(writing) {
   setSortOpen(false);
   composer.hidden = !writing;
   byId("browse-panel").hidden = writing;
-  relatedNotes.setVisible(writing);
+  updateAIExploreView();
   for (const button of workspaceButtons) {
     button.setAttribute("aria-pressed", String((button.dataset.workspacePanel === "write") === writing));
   }
   window.scrollTo(0, 0);
+}
+
+function updateAIExploreView() {
+  const allNotes = state.view === "all";
+  byId("ai-explore").hidden = !allNotes;
+  relatedNotes.setVisible(allNotes && !byId("workspace").hidden && !byId("browse-panel").hidden);
 }
 
 function chooseView(id) {
@@ -590,6 +596,7 @@ function render() {
   byId("batch-tags").disabled = !state.selected.size;
   byId("batch-delete").disabled = !state.selected.size;
   byId("select").setAttribute("aria-pressed", String(state.selecting));
+  updateAIExploreView();
   if (focusKey) document.querySelector("[data-focus-key='" + CSS.escape(focusKey) + "']")?.focus({ preventScroll: true });
 }
 
@@ -1010,7 +1017,6 @@ byId("capture-form").addEventListener("submit", async (event) => {
     if (input.value === draft) input.value = "";
     if (titleInput.value === titleDraft) titleInput.value = "";
     capturePhoto.reset();
-    relatedNotes.draftChanged();
     showNewCategoryForm(false);
     const capture = {
       id, multiple: false, selected: new Set(), newCategories: [], saving: false, expanded: false,
@@ -1244,6 +1250,7 @@ function showWorkspace(show) {
   byId("rail-content").hidden = !show;
   byId("rail-footer").hidden = !show;
   byId("auth").hidden = show;
+  updateAIExploreView();
 }
 
 function onNotes(notes, metadata) {

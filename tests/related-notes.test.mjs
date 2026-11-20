@@ -12,7 +12,7 @@ const controllerBody = (await source("related-notes.js"))
 const workerCode = (await source("classifier-worker.js"))
   .replace(/^import .*;\n/m, "").replace("await import(libraryUrl)", "await mockLibrary()");
 
-test("semantic ranking and composer lifecycle", () => {
+test("semantic ranking and AI exploration lifecycle", () => {
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
   const same = (actual, expected, message) => assert(JSON.stringify(actual) === JSON.stringify(expected), message + ": " + JSON.stringify(actual));
   class Element {
@@ -23,6 +23,7 @@ test("semantic ranking and composer lifecycle", () => {
     fire(name) { for (const handler of this.events.get(name) || []) handler({}); }
     replaceChildren(...children) { this.children = children; }
     append(...children) { this.children.push(...children); }
+    focus() { this.focused = true; }
   }
   function clock() {
     let id = 0;
@@ -46,7 +47,7 @@ test("semantic ranking and composer lifecycle", () => {
   const root = new Element();
   const toggle = new Element(), status = new Element(), results = new Element(), retry = new Element();
   root.elements = { "[data-related-toggle]": toggle, "[data-related-status]": status, "[data-related-retry]": retry, "[data-related-results]": results };
-  const title = new Element(), body = new Element();
+  const query = new Element();
   const timers = clock();
   const sent = [];
   let notes = [{ id: "a", title: "<script>draft</script>", body: "여행 메모" }, { id: "b", title: "운동", body: "달리기" }];
@@ -55,22 +56,25 @@ test("semantic ranking and composer lifecycle", () => {
   const worker = { postMessage(data) { sent.push(data); } };
   const makeController = new Function("relatedText", "relatedCandidates", "document", "setTimeout", "clearTimeout", controllerBody + "\nreturn createRelatedNotes;")(helpers.relatedText, helpers.relatedCandidates, { createElement: () => new Element() }, timers.setTimeout, timers.clearTimeout);
   const controller = makeController({
-    root, titleInput: title, bodyInput: body, getNotes: () => notes,
+    root, toggle, queryInput: query, getNotes: () => notes,
     getWorker: () => { calls++; return worker; }, openNote: (note) => { opened = note; },
   });
+  assert(root.hidden, "exploration panel starts closed");
   controller.setVisible(true);
-  body.value = "오사카에 가고 싶어";
-  body.fire("input");
+  query.value = "오사카에 가고 싶어";
+  query.fire("input");
   timers.run(700);
   same(calls, 0, "no download before opt-in");
   toggle.fire("click");
+  assert(!root.hidden && toggle.attributes["aria-expanded"] === "true", "AI exploration expands");
+  assert(query.focused, "opening panel focuses independent search field");
   same(timers.count(700), 1, "debounced search");
   timers.run(700);
   const first = sent.find((message) => message.task === "related");
   same(first.notes.map(({ id }) => id), ["a", "b"], "unfiltered corpus");
-  assert(first.query.includes("오사카"), "draft used as query");
-  body.value = "운동하고 싶어";
-  body.fire("input");
+  assert(first.query.includes("오사카"), "independent input used as query");
+  query.value = "운동하고 싶어";
+  query.fire("input");
   assert(sent.some((message) => message.task === "related-cancel" && message.request === first.request), "input cancels old search");
   controller.receive({ data: { task: "related", request: first.request, type: "result", matches: [{ id: "a" }] } });
   same(results.children.length, 0, "stale results ignored");
@@ -81,15 +85,17 @@ test("semantic ranking and composer lifecycle", () => {
   same(results.children[0].children[0].children[0].textContent, "<script>draft</script>", "titles rendered as text");
   results.children[0].children[0].fire("click");
   same(opened.id, "a", "result opens existing memo");
-  same(body.value, "운동하고 싶어", "opening result preserves draft");
-  output.push("composer: opt-in, debounce, full corpus, cancellation, stale results, safe text and preserved draft");
+  same(query.value, "운동하고 싶어", "opening result preserves exploration query");
+  controller.setVisible(true);
+  same(results.children.length, 2, "unchanged visibility during render preserves results");
+  output.push("exploration: opt-in, debounce, full corpus, cancellation, stale results, safe text and preserved query");
   
-  body.fire("compositionstart");
-  body.value = "여행 준비하는 중";
-  body.fire("input");
+  query.fire("compositionstart");
+  query.value = "여행 준비하는 중";
+  query.fire("input");
   timers.run(700);
   same(sent.filter((message) => message.task === "related").length, 2, "no search during Korean IME composition");
-  body.fire("compositionend");
+  query.fire("compositionend");
   timers.run(700);
   const third = sent.filter((message) => message.task === "related").at(-1);
   controller.receive({ data: { task: "related", request: third.request, type: "result", matches: [] } });
@@ -111,8 +117,22 @@ test("semantic ranking and composer lifecycle", () => {
   assert(sent.filter((message) => message.task === "related").length >= 6, "retry available");
   timers.run(180000);
   assert(retry.hidden === false, "timeout enables retry");
-  assert(toggle.textContent === "관련 메모 끄기", "off switch remains available after failure");
+  assert(toggle.attributes["aria-pressed"] === "true", "off switch remains available after failure");
+  controller.setVisible(false);
+  assert(root.hidden && toggle.attributes["aria-expanded"] === "false", "leaving All notes collapses exploration");
+  const beforeHiddenInput = sent.filter((message) => message.task === "related").length;
+  query.value = "새로운 여행 생각";
+  query.fire("input");
+  timers.run(700);
+  same(sent.filter((message) => message.task === "related").length, beforeHiddenInput, "hidden panel does not search");
+  controller.setVisible(true);
+  timers.run(700);
+  assert(!root.hidden, "returning to All notes resumes exploration");
+  assert(sent.filter((message) => message.task === "related").length === beforeHiddenInput + 1, "resumed search uses current query");
+  toggle.fire("click");
+  assert(root.hidden && toggle.attributes["aria-expanded"] === "false", "AI exploration button closes panel");
   controller.reset();
+  same(query.value, "", "account reset clears exploration text");
   same(toggle.attributes["aria-pressed"], "false", "logout disables related search");
   same(results.children.length, 0, "logout clears displayed notes");
   newest = sent.filter((message) => message.task === "related").at(-1);
@@ -178,7 +198,7 @@ test("worker caching, cancellation and existing classification", async () => {
   
 });
 
-test("browser modules parse and composer IDs are present", async () => {
+test("browser modules and All notes integration", async () => {
   const html = await source("index.html");
   const app = await source("app.js");
   for (const path of ["app.js", "classifier-worker.js", "semantic-search.js", "related-notes.js"]) {
@@ -186,10 +206,41 @@ test("browser modules parse and composer IDs are present", async () => {
       .replace(/import\.meta\.url/g, '"https://example.test/app.js"');
     assert.doesNotThrow(() => new Function(code), path);
   }
-  for (const id of ["related-notes", "related-title", "related-results", "capture-title", "capture-body"]) {
+  for (const id of ["related-notes", "related-title", "related-results", "related-query", "ai-explore", "capture-title", "capture-body"]) {
     assert.ok(html.includes('id="' + id + '"'), id);
   }
   assert.ok(app.includes("relatedNotes.reset();"));
   assert.ok(app.includes("relatedNotes.notesChanged();"));
-  assert.ok(app.includes("relatedNotes.setVisible(writing);"));
+  assert.ok(app.includes('queryInput: byId("related-query")'));
+  assert.ok(!app.includes("relatedNotes.draftChanged"));
+  const writeStart = html.indexOf('<section class="capture"');
+  const browseStart = html.indexOf('<section class="collection"');
+  assert.ok(!html.slice(writeStart, browseStart).includes('id="related-notes"'));
+  assert.ok(html.slice(browseStart).includes('id="ai-explore"'));
+  assert.ok(html.includes('id="capture-body" rows="16"'));
+  const css = await source("style.css");
+  assert.ok(css.includes("min-height: clamp(360px, 56dvh, 760px); max-height: none;"));
+  // Exercise the production visibility rule across the actual navigation states.
+  const updateView = app.match(/function updateAIExploreView\(\) \{[\s\S]*?\n\}/)[0];
+  const elements = {
+    "ai-explore": {}, workspace: { hidden: false }, "browse-panel": { hidden: false },
+  };
+  const state = { view: "all" };
+  let visible;
+  const sync = new Function("state", "byId", "relatedNotes", updateView + "\nreturn updateAIExploreView;")(
+    state, (id) => elements[id], { setVisible(value) { visible = value; } }
+  );
+  sync();
+  assert.ok(visible && !elements["ai-explore"].hidden);
+  state.view = "inbox";
+  sync();
+  assert.ok(!visible && elements["ai-explore"].hidden);
+  state.view = "all";
+  elements["browse-panel"].hidden = true;
+  sync();
+  assert.ok(!visible, "writing view suspends exploration");
+  elements["browse-panel"].hidden = false;
+  elements.workspace.hidden = true;
+  sync();
+  assert.ok(!visible, "signed-out view suspends exploration");
 });

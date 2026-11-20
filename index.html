@@ -8,8 +8,8 @@
   <meta name="description" content="모아에서 생각을 빠르게 기록하고, 주제로 모아보세요.">
   <title>모아 — 개인 메모장</title>
   <link rel="icon" href="./moa.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=18">
-  <script type="module" src="./app.js?v=18"></script>
+  <link rel="stylesheet" href="./style.css?v=19">
+  <script type="module" src="./app.js?v=19"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -74,7 +74,7 @@
         <h1 id="page-title">새 메모</h1>
         <form id="capture-form" class="capture-form">
           <input id="capture-title" class="capture-title" type="text" maxlength="120" aria-label="메모 제목 (선택)" placeholder="메모 제목">
-          <textarea id="capture-body" rows="6" maxlength="20000" aria-label="메모 내용" placeholder="떠오르는 생각을 적어보세요"></textarea>
+          <textarea id="capture-body" rows="16" maxlength="20000" aria-label="메모 내용" placeholder="떠오르는 생각을 적어보세요"></textarea>
           <div class="capture-footer" id="capture-photo">
             <input type="file" accept="image/*" data-photo-file hidden>
             <div class="photo-preview" data-photo-preview hidden>
@@ -93,15 +93,6 @@
             </div>
           </div>
         </form>
-        <section id="related-notes" class="related-notes" aria-labelledby="related-title">
-          <div class="related-heading">
-            <h2 id="related-title">관련 메모</h2>
-            <button type="button" class="soft-btn" data-related-toggle aria-pressed="false" aria-controls="related-results">관련 메모 찾기</button>
-          </div>
-          <p class="related-status" data-related-status role="status" aria-live="polite"></p>
-          <button type="button" class="plain-btn" data-related-retry hidden>다시 찾기</button>
-          <ul id="related-results" class="related-results" data-related-results aria-label="작성 내용과 관련된 메모" hidden></ul>
-        </section>
       </section>
 
       <section class="collection" id="browse-panel" aria-labelledby="list-title">
@@ -111,6 +102,7 @@
           <span id="note-count" class="note-count"></span>
           <div class="list-controls">
             <label class="search"><svg class="icon"><use href="#i-search"/></svg><input type="search" id="search" maxlength="120" placeholder="메모 검색" aria-label="메모 검색"></label>
+            <button type="button" class="soft-btn ai-explore" id="ai-explore" aria-pressed="false" aria-expanded="false" aria-controls="related-notes">AI 탐색</button>
             <button type="button" class="icon-btn outline" id="select" aria-label="여러 메모 선택" aria-pressed="false" title="여러 메모 선택"><svg class="icon"><use href="#i-select"/></svg></button>
             <button type="button" class="icon-btn outline" id="grid-view" aria-label="촘촘하게 보기" aria-pressed="false" aria-controls="notes" title="촘촘하게 보기"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg></button>
             <div class="sort-control" id="sort-control">
@@ -124,6 +116,15 @@
             </div>
           </div>
         </div>
+        <section id="related-notes" class="related-notes" aria-labelledby="related-title" hidden>
+          <h2 id="related-title">AI 탐색</h2>
+          <label class="related-query-label" for="related-query">어떤 메모를 찾고 있나요?</label>
+          <textarea id="related-query" class="related-query" rows="3" maxlength="1000" placeholder="떠오르는 생각을 적어보세요. 예: 퇴근 후 가볍게 배울 만한 것" aria-describedby="related-hint related-status"></textarea>
+          <p id="related-hint" class="related-hint">같은 단어가 없어도 의미가 가까운 메모를 찾아요. 처음 찾을 때 AI 모델 약 120MB를 내려받아요.</p>
+          <p id="related-status" class="related-status" data-related-status role="status" aria-live="polite"></p>
+          <button type="button" class="plain-btn" data-related-retry hidden>다시 찾기</button>
+          <ul id="related-results" class="related-results" data-related-results aria-label="생각과 관련된 메모" hidden></ul>
+        </section>
         <div id="selection" class="selection-bar" hidden>
           <span id="selected-count"></span>
           <button type="button" class="plain-btn" id="select-all">표시된 메모 모두 선택</button>

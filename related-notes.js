@@ -1,7 +1,6 @@
 import { relatedText, relatedCandidates } from "./semantic-search.js?v=18";
 
-export function createRelatedNotes({ root, titleInput, bodyInput, getNotes, getWorker, openNote, delay = 700 }) {
-  const toggle = root.querySelector("[data-related-toggle]");
+export function createRelatedNotes({ root, toggle, queryInput, getNotes, getWorker, openNote, delay = 700 }) {
   const status = root.querySelector("[data-related-status]");
   const retry = root.querySelector("[data-related-retry]");
   const results = root.querySelector("[data-related-results]");
@@ -36,7 +35,7 @@ export function createRelatedNotes({ root, titleInput, bodyInput, getNotes, getW
   }
 
   function idleMessage() {
-    return enabled ? "생각을 적으면 관련 메모를 찾아드려요." : "켜면 작성 중인 내용과 비슷한 메모를 찾아요. 첫 사용 시 AI 모델 약 120MB를 내려받아요.";
+    return "찾고 싶은 생각을 네 글자 이상 적어보세요.";
   }
 
   function fail() {
@@ -77,14 +76,13 @@ export function createRelatedNotes({ root, titleInput, bodyInput, getNotes, getW
   function search() {
     timer = undefined;
     if (!enabled || suspended || composing) return;
-    const query = relatedText(titleInput.value, bodyInput.value);
+    const query = relatedText("", queryInput.value);
     const candidates = relatedCandidates(getNotes());
     if (query.length < 4 || !candidates.length) {
       say(!candidates.length ? "텍스트 메모를 저장하면 여기서 찾아볼 수 있어요." : "네 글자 이상 적으면 찾아드려요.");
       return;
     }
     retry.hidden = true;
-    toggle.textContent = "관련 메모 끄기";
     const request = "related-" + ++sequence;
     activeRequest = request;
     say("AI를 준비하고 관련 메모를 찾고 있어요.", true);
@@ -134,18 +132,25 @@ export function createRelatedNotes({ root, titleInput, bodyInput, getNotes, getW
   toggle.addEventListener("click", () => {
     enabled = !enabled;
     toggle.setAttribute("aria-pressed", String(enabled));
-    toggle.textContent = enabled ? "관련 메모 끄기" : "관련 메모 찾기";
+    updatePanel();
     schedule();
+    if (enabled && !suspended) queryInput.focus();
   });
 
   retry.addEventListener("click", schedule);
 
-  for (const input of [titleInput, bodyInput]) {
+  for (const input of [queryInput]) {
     input.addEventListener("input", schedule);
     input.addEventListener("compositionstart", () => { composing = true; schedule(); });
     input.addEventListener("compositionend", () => { composing = false; schedule(); });
   }
 
+  function updatePanel() {
+    root.hidden = !enabled || suspended;
+    toggle.setAttribute("aria-expanded", String(!root.hidden));
+  }
+
+  updatePanel();
   say(idleMessage());
   return {
     receive,
@@ -160,10 +165,11 @@ export function createRelatedNotes({ root, titleInput, bodyInput, getNotes, getW
       schedule();
     },
     setVisible(visible) {
+      if (suspended === !visible) return;
       suspended = !visible;
+      updatePanel();
       schedule();
     },
-    draftChanged: schedule,
     reset() {
       cancel();
       worker = undefined;
@@ -173,7 +179,8 @@ export function createRelatedNotes({ root, titleInput, bodyInput, getNotes, getW
       suspended = true;
       corpus = "";
       toggle.setAttribute("aria-pressed", "false");
-      toggle.textContent = "관련 메모 찾기";
+      queryInput.value = "";
+      updatePanel();
       clearResults();
       say(idleMessage());
     },
