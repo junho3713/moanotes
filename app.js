@@ -8,6 +8,17 @@ const maxBatch = 400;
 const maxTitleLength = 120;
 const maxBackupBytes = 32 * 1024 * 1024;
 const workspaceButtons = [...document.querySelectorAll("[data-workspace-panel]")];
+const classificationButtons = [...document.querySelectorAll("[data-classification-mode]")];
+const classificationPreference = "moa.classification.mode";
+let classificationMode = "manual";
+let classificationWorker;
+let classifierReady = false;
+let classificationRequest = 0;
+try {
+  if (localStorage.getItem(classificationPreference) === "auto") classificationMode = "auto";
+} catch {
+  // The current session can still use the mode when browser storage is disabled.
+}
 const state = {
   notes: [], view: "all", query: "", sort: "newest",
   selecting: false, selected: new Set(), store: null,
@@ -150,6 +161,121 @@ function recentCategories() {
   return [...categories];
 }
 
+function renderClassificationMode() {
+  for (const control of classificationButtons) {
+    control.setAttribute("aria-pressed", String(control.dataset.classificationMode === classificationMode));
+  }
+  byId("classification-download").hidden = classificationMode !== "auto" || classifierReady;
+}
+
+function classificationText(title, body) {
+  return [title, body].filter(Boolean).join(" ").replace(/\s+/gu, " ").trim().slice(0, 360);
+}
+
+function classificationExamples(skipId) {
+  const groups = new Map();
+  for (const note of [...state.notes].sort((a, b) => b.updatedAt - a.updatedAt)) {
+    if (note.id === skipId || !note.tags.length) continue;
+    const text = classificationText(note.title, note.body);
+    if (!text) continue;
+    for (const category of note.tags) {
+      if (!groups.has(category) && groups.size < 16) groups.set(category, new Set());
+      const samples = groups.get(category);
+      if (samples && samples.size < 2) samples.add(category + " " + text);
+    }
+  }
+  return [...groups].flatMap(([category, texts]) => [...texts].map((text) => ({ category, text })));
+}
+
+function setClassificationStatus(capture, message) {
+  capture.aiMessage = message;
+  if (!capture.saving) byId("capture-category-status").textContent = message || "메모를 저장했어요.";
+}
+
+function cancelAutomaticCategory(capture) {
+  if (!capture?.aiRequest) return;
+  clearTimeout(capture.aiTimeout);
+  capture.aiRequest = null;
+  capture.aiMessage = "";
+}
+
+function classificationFailed(capture) {
+  cancelAutomaticCategory(capture);
+  setClassificationStatus(capture, "AI를 준비하지 못했어요. 분류를 직접 골라 주세요.");
+}
+
+function resetClassificationWorker() {
+  classificationWorker?.terminate();
+  classificationWorker = undefined;
+  classifierReady = false;
+  renderClassificationMode();
+}
+
+function handleClassification({ data: { request, type, ranked } }) {
+  if (type === "ready") {
+    classifierReady = true;
+    renderClassificationMode();
+  }
+  const capture = state.recentCapture;
+  if (!capture?.aiRequest || capture.aiRequest !== request || !byId("capture-categories").open) return;
+  if (type === "ready") {
+    setClassificationStatus(capture, "AI가 기존 메모와 비교하고 있어요.");
+    return;
+  }
+  if (type === "error") {
+    classificationFailed(capture);
+    return;
+  }
+  if (type !== "result") return;
+
+  cancelAutomaticCategory(capture);
+  const available = new Set(recentCategories());
+  const [[category, score] = [], [, nextScore] = []] = ranked.filter(([name]) => available.has(name));
+  const current = state.notes.find(({ id }) => id === capture.id);
+  if (!current || current.tags.length || !category || score < 0.79) {
+    setClassificationStatus(capture, "확실한 분류를 찾지 못했어요. 직접 골라 주세요.");
+    return;
+  }
+  capture.aiSuggestion = category;
+  setClassificationStatus(capture, "AI가 어울리는 분류를 찾았어요.");
+  // Cosine similarity is a heuristic. Apply just one label when the best match is clearly ahead.
+  if (nextScore === undefined ? score >= 0.91 : score >= 0.86 && score - nextScore >= 0.045) {
+    void saveQuickCategories([category], category, true);
+  } else {
+    drawQuickCategories();
+  }
+}
+
+function startAutomaticCategory(capture, title, body) {
+  if (classificationMode !== "auto") return;
+  const query = classificationText(title, body);
+  const examples = query ? classificationExamples(capture.id) : [];
+  if (!examples.length) {
+    setClassificationStatus(capture, query ? "분류해 둔 메모가 생기면 AI가 참고해요." : "사진 메모는 분류를 직접 골라 주세요.");
+    return;
+  }
+  try {
+    if (!classificationWorker) {
+      classificationWorker = new Worker(new URL("./classifier-worker.js?v=16", import.meta.url), { type: "module" });
+      classificationWorker.addEventListener("message", handleClassification);
+      classificationWorker.addEventListener("error", () => {
+        resetClassificationWorker();
+        if (state.recentCapture?.aiRequest) classificationFailed(state.recentCapture);
+      });
+    }
+    capture.aiRequest = ++classificationRequest;
+    setClassificationStatus(capture, classifierReady ? "AI가 기존 메모와 비교하고 있어요." : "AI 모델을 준비하고 있어요. 먼저 분류를 골라도 돼요.");
+    capture.aiTimeout = setTimeout(() => {
+      if (state.recentCapture !== capture || !capture.aiRequest) return;
+      resetClassificationWorker();
+      classificationFailed(capture);
+    }, 180000);
+    classificationWorker.postMessage({ request: capture.aiRequest, query, examples });
+  } catch {
+    classificationFailed(capture);
+  }
+}
+
 function showNewCategoryForm(show) {
   byId("quick-form").hidden = !show;
   byId("quick-new").setAttribute("aria-expanded", String(show));
@@ -169,9 +295,11 @@ function finishCaptureInView(view) {
 function drawQuickCategories() {
   const capture = state.recentCapture;
   if (!capture) return;
-  const categories = [...new Set([...capture.newCategories, ...recentCategories()])];
+  const options = [...new Set([...capture.newCategories, ...recentCategories()])];
+  const suggested = options.includes(capture.aiSuggestion) ? capture.aiSuggestion : null;
+  const categories = suggested ? [suggested, ...options.filter((name) => name !== suggested)] : options;
   const status = byId("capture-category-status");
-  const message = capture.saving ? "분류에 추가하는 중이에요." : "메모를 저장했어요.";
+  const message = capture.saving ? "분류에 추가하는 중이에요." : capture.aiMessage || "메모를 저장했어요.";
   if (status.textContent !== message) status.textContent = message;
   byId("capture-mode-hint").textContent = !categories.length
     ? "새 분류를 만들거나 나중에 분류할 수 있어요."
@@ -188,6 +316,7 @@ function drawQuickCategories() {
   byId("quick-options").replaceChildren(...visibleCategories.map((category) => {
     const selected = capture.selected.has(category);
     const choice = button("quick-button quick-option " + palette(category), undefined, () => {
+      cancelAutomaticCategory(capture);
       if (capture.multiple) {
         if (selected) capture.selected.delete(category);
         else selectQuickCategory(capture, category);
@@ -207,6 +336,7 @@ function drawQuickCategories() {
       choice.append(marker);
     }
     choice.append(category);
+    if (category === suggested) choice.append(node("span", "quick-recommendation", "AI 추천"));
     return choice;
   }));
   byId("quick-new").disabled = capture.saving;
@@ -239,7 +369,7 @@ function selectQuickCategory(capture, category) {
   return true;
 }
 
-async function saveQuickCategories(categories, destination) {
+async function saveQuickCategories(categories, destination, automatic = false) {
   const capture = state.recentCapture;
   if (!capture || capture.saving || !categories.length) return;
   const dialog = byId("capture-categories");
@@ -265,7 +395,7 @@ async function saveQuickCategories(categories, destination) {
   }
   if (destination) {
     finishCaptureInView("tag:" + destination);
-    toast("‘" + destination + "’에 추가했어요.");
+    toast(automatic ? "AI가 ‘" + destination + "’에 분류했어요." : "‘" + destination + "’에 추가했어요.");
   } else {
     finishCaptureInView("all");
     toast("메모를 " + categories.length + "곳에 추가했어요.");
@@ -301,6 +431,7 @@ function createQuickCategory() {
 function changeQuickMode(multiple) {
   const capture = state.recentCapture;
   if (!capture || capture.saving || capture.multiple === multiple) return;
+  cancelAutomaticCategory(capture);
   capture.multiple = multiple;
   byId("capture-categories").querySelector(".dialog-feedback")?.remove();
   drawQuickCategories();
@@ -822,6 +953,18 @@ document.addEventListener("paste", (event) => {
 });
 
 byId("today").textContent = dateLabel.format(new Date());
+for (const control of classificationButtons) {
+  control.addEventListener("click", () => {
+    classificationMode = control.dataset.classificationMode;
+    try {
+      localStorage.setItem(classificationPreference, classificationMode);
+    } catch {
+      // Keep the chosen mode for this session when browser storage cannot be written.
+    }
+    renderClassificationMode();
+  });
+}
+renderClassificationMode();
 for (const button of workspaceButtons) {
   button.addEventListener("click", () => showPanel(button.dataset.workspacePanel === "write"));
 }
@@ -851,15 +994,23 @@ byId("capture-form").addEventListener("submit", async (event) => {
     if (titleInput.value === titleDraft) titleInput.value = "";
     capturePhoto.reset();
     showNewCategoryForm(false);
-    state.recentCapture = {
+    const capture = {
       id, multiple: false, selected: new Set(), newCategories: [], saving: false, expanded: false,
     };
+    state.recentCapture = capture;
     drawQuickCategories();
     openDialog("capture-categories");
+    startAutomaticCategory(capture, titleDraft.trim(), body);
   }
   updateCaptureButton();
 });
-byId("quick-new").addEventListener("click", () => showNewCategoryForm(byId("quick-form").hidden));
+byId("quick-new").addEventListener("click", () => {
+  if (state.recentCapture?.aiRequest) {
+    cancelAutomaticCategory(state.recentCapture);
+    drawQuickCategories();
+  }
+  showNewCategoryForm(byId("quick-form").hidden);
+});
 byId("category-single").addEventListener("click", () => changeQuickMode(false));
 byId("category-multiple").addEventListener("click", () => changeQuickMode(true));
 byId("quick-apply").addEventListener("click", () => {
@@ -868,6 +1019,7 @@ byId("quick-apply").addEventListener("click", () => {
 byId("quick-more").addEventListener("click", () => {
   const capture = state.recentCapture;
   if (!capture) return;
+  cancelAutomaticCategory(capture);
   capture.expanded = !capture.expanded;
   drawQuickCategories();
 });
@@ -877,6 +1029,7 @@ byId("capture-categories").addEventListener("cancel", (event) => {
   if (!state.recentCapture?.saving) finishCaptureInView("all");
 });
 byId("capture-categories").addEventListener("close", () => {
+  cancelAutomaticCategory(state.recentCapture);
   state.recentCapture = null;
   showNewCategoryForm(false);
 });
@@ -1069,6 +1222,7 @@ for (const dialog of document.querySelectorAll("dialog")) {
 
 function showWorkspace(show) {
   byId("workspace").hidden = !show;
+  byId("capture-classification").hidden = !show;
   byId("rail-content").hidden = !show;
   byId("rail-footer").hidden = !show;
   byId("auth").hidden = show;
@@ -1077,6 +1231,7 @@ function showWorkspace(show) {
 function onNotes(notes, metadata) {
   const recentId = state.recentCapture?.id;
   if (recentId && state.notes.some(({ id }) => id === recentId) && !notes.some(({ id }) => id === recentId)) {
+    cancelAutomaticCategory(state.recentCapture);
     state.recentCapture = null;
     showNewCategoryForm(false);
     if (byId("capture-categories").open) byId("capture-categories").close();
@@ -1101,7 +1256,9 @@ function resetWorkspaceSession() {
   state.store?.disconnect();
   state.store = null;
   state.notes = [];
+  cancelAutomaticCategory(state.recentCapture);
   state.recentCapture = null;
+  resetClassificationWorker();
   showNewCategoryForm(false);
   state.selected.clear();
   state.selecting = false;

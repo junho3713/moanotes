@@ -8,8 +8,8 @@
   <meta name="description" content="모아에서 생각을 빠르게 기록하고, 주제로 모아보세요.">
   <title>모아 — 개인 메모장</title>
   <link rel="icon" href="./moa.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=15">
-  <script type="module" src="./app.js?v=15"></script>
+  <link rel="stylesheet" href="./style.css?v=16">
+  <script type="module" src="./app.js?v=16"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -32,6 +32,13 @@
 
   <aside class="rail" aria-label="메모 보관함">
     <a class="brand" href="./" aria-label="모아 홈"><img src="./moa.svg" alt="" width="38" height="38"><span>모아</span></a>
+    <div class="capture-classification" id="capture-classification" hidden>
+      <div class="classification-switch" role="group" aria-label="메모 분류 방식">
+        <button type="button" data-classification-mode="manual" aria-pressed="true">직접 분류</button>
+        <button type="button" data-classification-mode="auto" aria-pressed="false">자동 분류</button>
+      </div>
+      <p id="classification-download" hidden>첫 사용 시 AI 모델 약 120MB 다운로드</p>
+    </div>
     <div id="rail-content" hidden>
       <nav class="rail-workspace-nav" aria-label="메모 화면">
         <button type="button" class="rail-button" data-workspace-panel="write" aria-controls="write-panel" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>메모 쓰기</button>
