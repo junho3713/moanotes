@@ -832,6 +832,10 @@ byId("select").addEventListener("click", () => {
   state.selected.clear();
   render();
 });
+byId("grid-view").addEventListener("click", (event) => {
+  const compact = byId("notes").classList.toggle("is-compact");
+  event.currentTarget.setAttribute("aria-pressed", String(compact));
+});
 byId("select-all").addEventListener("click", () => {
   const visible = visibleNotes();
   state.selected = state.selected.size === visible.length ? new Set() : new Set(visible.map(({ id }) => id));

@@ -146,12 +146,16 @@ dialog.capture-categories { width: min(540px, calc(100% - 32px)); }
 .selection-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .batch-danger { border-color: #dfc1b9; background: var(--sheet); }
 .note-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+.note-grid.is-compact { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .note { min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; background: var(--sheet); padding: 14px 17px 12px; min-height: 155px; }
+.note-grid.is-compact .note { padding-inline: 10px; }
 .note.checked { border-color: #8da987; background: #f0f5ed; }
 .note-meta, .note-foot { display: flex; align-items: center; gap: 5px; }
 .note-meta { margin-bottom: 5px; color: var(--quiet); font-size: 12px; }
 .note-meta time { flex: 1; font-variant-numeric: tabular-nums; }
 .note-meta .icon-btn { width: 34px; height: 34px; margin: -3px -3px -3px 0; }
+.note-grid.is-compact .note-meta { flex-wrap: wrap; }
+.note-grid.is-compact .note-meta .icon-btn { margin-inline-start: auto; }
 .note-meta .icon-btn .icon { width: 18px; height: 18px; }
 .note-content { display: block; text-align: left; width: 100%; padding: 5px 0 7px; background: transparent; border: 0; border-radius: 3px; min-width: 0; }
 .note-content:hover .note-title { color: #496b51; }
@@ -159,6 +163,7 @@ dialog.capture-categories { width: min(540px, calc(100% - 32px)); }
 .note-title { font-size: 16px; font-weight: 800; line-height: 1.5; -webkit-line-clamp: 2; }
 .note-snippet { color: var(--muted); margin-top: 4px; font-size: 14px; line-height: 1.5; -webkit-line-clamp: 2; }
 .note-photo { display: block; width: 100%; height: 115px; margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--rail); object-fit: contain; }
+.note-grid.is-compact .note-photo { height: 90px; }
 .note-check { width: 20px; height: 20px; margin: 0 4px 0 0; accent-color: var(--green); cursor: pointer; }
 .note-foot { flex-wrap: wrap; margin-top: auto; padding-top: 8px; }
 .chip, .tag-edit, .mobile-chip { align-items: center; display: inline-flex; min-height: 29px; border-radius: 999px; border: 1px solid transparent; padding: 3px 9px; font-size: 12px; font-weight: 720; max-width: 100%; overflow-wrap: anywhere; }
@@ -239,6 +244,7 @@ dialog textarea { resize: vertical; max-height: 46dvh; }
   .search input { flex: 1; width: 100%; height: 42px; font-size: 16px; }
   .icon-btn.outline { width: 44px; height: 44px; }
   .note-grid { grid-template-columns: 1fr; gap: 9px; }
+  .note-grid.is-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .note { padding: 11px 13px 9px; min-height: 0; }
   .note-meta .icon-btn { width: 44px; height: 44px; margin: -7px -6px -7px 0; }
   .tag-edit, .note-foot .chip, .tag-options .chip, #add-tag, #batch-tags { min-height: 48px; padding-inline: 12px; }

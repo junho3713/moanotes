@@ -8,8 +8,8 @@
   <meta name="description" content="모아에서 생각을 빠르게 기록하고, 주제로 모아보세요.">
   <title>모아 — 개인 메모장</title>
   <link rel="icon" href="./moa.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=8">
-  <script type="module" src="./app.js?v=6"></script>
+  <link rel="stylesheet" href="./style.css?v=9">
+  <script type="module" src="./app.js?v=9"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -25,6 +25,7 @@
     <symbol id="i-account" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M5 20v-1a7 7 0 0 1 14 0v1"/></symbol>
     <symbol id="i-sort" viewBox="0 0 24 24"><path d="M5 7h14M8 12h8m-5 5h2"/></symbol>
     <symbol id="i-select" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 3 3 5-6"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M7 7l1 13h8l1-13M9 7V4h6v3"/></symbol>
     <symbol id="i-photo" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="m4 17 4.5-4 3.5 3 4.5-5 4 4"/></symbol>
   </svg>
@@ -87,6 +88,7 @@
           <div class="list-controls">
             <label class="search"><svg class="icon"><use href="#i-search"/></svg><input type="search" id="search" maxlength="120" placeholder="메모 검색" aria-label="메모 검색"></label>
             <button type="button" class="icon-btn outline" id="select" aria-label="여러 메모 선택" aria-pressed="false" title="여러 메모 선택"><svg class="icon"><use href="#i-select"/></svg></button>
+            <button type="button" class="icon-btn outline" id="grid-view" aria-label="촘촘하게 보기" aria-pressed="false" aria-controls="notes" title="촘촘하게 보기"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg></button>
             <button type="button" class="icon-btn outline" id="sort" aria-label="오래된 메모부터 보기" aria-pressed="false" title="오래된 메모부터 보기"><svg class="icon"><use href="#i-sort"/></svg></button>
           </div>
         </div>
