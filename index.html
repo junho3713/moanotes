@@ -8,8 +8,8 @@
   <meta name="description" content="모아에서 생각을 빠르게 기록하고, 주제로 모아보세요.">
   <title>모아 — 개인 메모장</title>
   <link rel="icon" href="./moa.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=10">
-  <script type="module" src="./app.js?v=10"></script>
+  <link rel="stylesheet" href="./style.css?v=11">
+  <script type="module" src="./app.js?v=11"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -33,6 +33,10 @@
   <aside class="rail" aria-label="메모 보관함">
     <a class="brand" href="./" aria-label="모아 홈"><img src="./moa.svg" alt="" width="38" height="38"><span>모아</span></a>
     <div id="rail-content" hidden>
+      <nav class="rail-workspace-nav" aria-label="메모 화면">
+        <button type="button" class="rail-button" data-workspace-panel="browse" aria-controls="browse-panel" aria-pressed="true"><svg class="icon" aria-hidden="true"><use href="#i-notes"/></svg>메모 보기</button>
+        <button type="button" class="rail-button" data-workspace-panel="write" aria-controls="write-panel" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>메모 쓰기</button>
+      </nav>
       <p class="rail-heading">보관함</p>
       <nav id="folders" class="folders" aria-label="보관함"></nav>
       <div class="rail-topics">
@@ -56,8 +60,8 @@
       </header>
 
       <nav class="workspace-nav" aria-label="메모 화면">
-        <button type="button" id="browse-notes" aria-controls="browse-panel" aria-pressed="true"><svg class="icon" aria-hidden="true"><use href="#i-notes"/></svg>메모 보기</button>
-        <button type="button" id="write-note" aria-controls="write-panel" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>메모 쓰기</button>
+        <button type="button" data-workspace-panel="browse" aria-controls="browse-panel" aria-pressed="true"><svg class="icon" aria-hidden="true"><use href="#i-notes"/></svg>메모 보기</button>
+        <button type="button" data-workspace-panel="write" aria-controls="write-panel" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>메모 쓰기</button>
       </nav>
 
       <section class="capture" id="write-panel" aria-labelledby="page-title" hidden>
@@ -97,8 +101,10 @@
             <div class="sort-control" id="sort-control">
               <button type="button" class="icon-btn outline" id="sort" aria-label="메모 정렬" aria-expanded="false" aria-controls="sort-options" title="메모 정렬"><svg class="icon" aria-hidden="true"><use href="#i-sort"/></svg></button>
               <div class="sort-options" id="sort-options" role="group" aria-label="정렬 방식" hidden>
-                <button type="button" data-sort="date" aria-pressed="true">날짜순<svg class="icon" aria-hidden="true"><use href="#i-check"/></svg></button>
+                <button type="button" data-sort="newest" aria-pressed="true">최신순<svg class="icon" aria-hidden="true"><use href="#i-check"/></svg></button>
+                <button type="button" data-sort="oldest" aria-pressed="false">오래된 순<svg class="icon" aria-hidden="true"><use href="#i-check"/></svg></button>
                 <button type="button" data-sort="name" aria-pressed="false">가나다순<svg class="icon" aria-hidden="true"><use href="#i-check"/></svg></button>
+                <button type="button" data-sort="name-reverse" aria-pressed="false">가나다 역순<svg class="icon" aria-hidden="true"><use href="#i-check"/></svg></button>
               </div>
             </div>
           </div>

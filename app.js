@@ -7,8 +7,9 @@ const maxTags = 20;
 const maxBatch = 400;
 const maxTitleLength = 120;
 const maxBackupBytes = 32 * 1024 * 1024;
+const workspaceButtons = [...document.querySelectorAll("[data-workspace-panel]")];
 const state = {
-  notes: [], view: "all", query: "", sort: "date",
+  notes: [], view: "all", query: "", sort: "newest",
   selecting: false, selected: new Set(), store: null,
   editingId: null, tagIds: [], draftTags: new Set(),
   recentCapture: null,
@@ -19,6 +20,14 @@ const folders = [
   { id: "pinned", text: "고정", icon: "pin", test: (note) => note.pinned },
 ];
 const collator = new Intl.Collator("ko");
+const newestFirst = (a, b) => b.createdAt - a.createdAt;
+const byNoteName = (a, b) => collator.compare(noteHeading(a), noteHeading(b));
+const noteSorts = {
+  newest: newestFirst,
+  oldest: (a, b) => newestFirst(b, a),
+  name: byNoteName,
+  "name-reverse": (a, b) => byNoteName(b, a),
+};
 const dateLabel = new Intl.DateTimeFormat("ko-KR", { year: "2-digit", month: "long", day: "numeric", weekday: "long" });
 const noteDate = new Intl.DateTimeFormat("ko-KR", { year: "2-digit", month: "numeric", day: "numeric" });
 const fullDate = new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short" });
@@ -89,8 +98,9 @@ function showPanel(writing) {
   setSortOpen(false);
   composer.hidden = !writing;
   byId("browse-panel").hidden = writing;
-  byId("write-note").setAttribute("aria-pressed", String(writing));
-  byId("browse-notes").setAttribute("aria-pressed", String(!writing));
+  for (const button of workspaceButtons) {
+    button.setAttribute("aria-pressed", String((button.dataset.workspacePanel === "write") === writing));
+  }
   window.scrollTo(0, 0);
 }
 
@@ -300,12 +310,12 @@ function visibleNotes() {
   const folder = folders.find(({ id }) => id === state.view);
   const matchesView = folder ? folder.test : (note) => note.tags.includes(state.view.slice(4));
   const terms = normalize(state.query).split(/\s+/u).filter(Boolean);
+  const compare = noteSorts[state.sort];
   return state.notes.filter((note) => {
     if (!matchesView(note)) return false;
     const haystack = normalize([note.title, note.body, note.thumbnail ? "사진" : "", ...note.tags].join(" "));
     return terms.every((term) => haystack.includes(term));
-  }).sort((a, b) => (state.sort === "name" ? collator.compare(noteHeading(a), noteHeading(b)) : 0)
-    || b.createdAt - a.createdAt || a.id.localeCompare(b.id));
+  }).sort((a, b) => compare(a, b) || newestFirst(a, b) || a.id.localeCompare(b.id));
 }
 
 function noteHeading(note, firstLine) {
@@ -765,8 +775,9 @@ document.addEventListener("paste", (event) => {
 });
 
 byId("today").textContent = dateLabel.format(new Date());
-byId("browse-notes").addEventListener("click", () => showPanel(false));
-byId("write-note").addEventListener("click", () => showPanel(true));
+for (const button of workspaceButtons) {
+  button.addEventListener("click", () => showPanel(button.dataset.workspacePanel === "write"));
+}
 byId("capture-body").addEventListener("input", updateCaptureButton);
 byId("capture-body").addEventListener("keydown", (event) => {
   if (!event.isComposing && (event.ctrlKey || event.metaKey) && event.key === "Enter") {
@@ -852,7 +863,7 @@ for (const choice of sortChoices) {
     for (const option of sortChoices) option.setAttribute("aria-pressed", String(option === choice));
     setSortOpen(false, true);
     render();
-    byId("announcement").textContent = state.sort === "date" ? "날짜순으로 정렬했어요." : "가나다순으로 정렬했어요.";
+    byId("announcement").textContent = choice.textContent.trim() + "으로 정렬했어요.";
   });
 }
 const sortControl = byId("sort-control");
