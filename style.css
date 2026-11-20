@@ -289,3 +289,21 @@ dialog textarea { resize: vertical; max-height: 46dvh; }
   .connection { padding-inline: 7px; }
   .mobile-utility { width: 39px; }
 }
+
+/* Suggestions stay below the composer so opening a note preserves the draft. */
+.related-notes { margin-top: 20px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--sheet); }
+.related-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
+.related-heading h2 { font-size: 17px; letter-spacing: -.02em; }
+.related-heading button { min-height: 44px; }
+.related-heading button[aria-pressed="true"] { background: var(--tint); color: var(--green-dark); }
+.related-status { margin-top: 7px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.related-results { list-style: none; display: grid; gap: 8px; padding: 0; margin: 12px 0 0; }
+.related-note { display: grid; gap: 4px; width: 100%; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); text-align: left; }
+.related-note:hover { background: var(--tint); border-color: #a7bba0; }
+.related-note-title, .related-note-preview { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; white-space: pre-wrap; }
+.related-note-title { font-size: 15px; font-weight: 750; -webkit-line-clamp: 2; }
+.related-note-preview { color: var(--muted); font-size: 13px; -webkit-line-clamp: 2; }
+@media (max-width: 700px) {
+  .related-notes { padding: 14px; }
+  .related-note { padding: 12px; }
+}

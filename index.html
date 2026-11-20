@@ -8,8 +8,8 @@
   <meta name="description" content="모아에서 생각을 빠르게 기록하고, 주제로 모아보세요.">
   <title>모아 — 개인 메모장</title>
   <link rel="icon" href="./moa.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=17">
-  <script type="module" src="./app.js?v=17"></script>
+  <link rel="stylesheet" href="./style.css?v=18">
+  <script type="module" src="./app.js?v=18"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -93,6 +93,15 @@
             </div>
           </div>
         </form>
+        <section id="related-notes" class="related-notes" aria-labelledby="related-title">
+          <div class="related-heading">
+            <h2 id="related-title">관련 메모</h2>
+            <button type="button" class="soft-btn" data-related-toggle aria-pressed="false" aria-controls="related-results">관련 메모 찾기</button>
+          </div>
+          <p class="related-status" data-related-status role="status" aria-live="polite"></p>
+          <button type="button" class="plain-btn" data-related-retry hidden>다시 찾기</button>
+          <ul id="related-results" class="related-results" data-related-results aria-label="작성 내용과 관련된 메모" hidden></ul>
+        </section>
       </section>
 
       <section class="collection" id="browse-panel" aria-labelledby="list-title">
