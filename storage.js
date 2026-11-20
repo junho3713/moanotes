@@ -48,6 +48,10 @@ export function localStore(onChange, onError) {
     },
     async update(id, patch) { write((items) => items.map((note) => note.id === id ? { ...note, ...patch } : note)); },
     async remove(id) { write((items) => items.filter((note) => note.id !== id)); },
+    async removeMany(ids) {
+      const targets = new Set(ids);
+      write((items) => items.filter(({ id }) => !targets.has(id)));
+    },
     async addTags(ids, tags, updatedAt) {
       write((items) => items.map((note) => ids.includes(note.id)
         ? { ...note, tags: [...new Set([...note.tags, ...tags])], updatedAt }
@@ -87,6 +91,11 @@ export async function openCloud(config) {
         },
         update: (id, patch) => dbSdk.updateDoc(ref(id), patch),
         remove: (id) => dbSdk.deleteDoc(ref(id)),
+        async removeMany(ids) {
+          const batch = dbSdk.writeBatch(db);
+          for (const id of ids) batch.delete(ref(id));
+          await batch.commit();
+        },
         async addTags(ids, tags, updatedAt) {
           const batch = dbSdk.writeBatch(db);
           for (const id of ids) {

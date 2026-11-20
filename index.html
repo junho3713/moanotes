@@ -8,8 +8,8 @@
   <meta name="description" content="모아에서 생각을 빠르게 기록하고, 주제로 모아보세요.">
   <title>모아 — 개인 메모장</title>
   <link rel="icon" href="./moa.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=2">
-  <script type="module" src="./app.js?v=2"></script>
+  <link rel="stylesheet" href="./style.css?v=3">
+  <script type="module" src="./app.js?v=3"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -56,30 +56,15 @@
       <section class="capture" aria-labelledby="page-title">
         <h1 id="page-title">내 메모</h1>
         <form id="capture-form" class="capture-form">
-          <label for="capture-body">빠른 메모</label>
+          <label for="capture-title">제목 <span class="field-optional">선택</span></label>
+          <input id="capture-title" class="capture-title" type="text" maxlength="120" placeholder="메모 제목">
+          <label for="capture-body">내용</label>
           <textarea id="capture-body" rows="2" maxlength="20000" placeholder="떠오르는 생각을 적어보세요"></textarea>
           <div class="capture-footer">
             <span class="shortcut">Ctrl / ⌘ + Enter</span>
             <button type="submit" id="capture-submit" class="primary"><svg class="icon"><use href="#i-plus"/></svg>메모 저장</button>
           </div>
         </form>
-        <section id="capture-categories" class="capture-categories" aria-label="방금 저장한 메모 분류" hidden>
-          <div class="capture-categories-head">
-            <svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>
-            <p id="capture-category-status" role="status"></p>
-            <button type="button" class="quick-button quick-view" id="quick-view" hidden>분류 보기</button>
-          </div>
-          <div class="quick-actions">
-            <div class="quick-options" id="quick-options"></div>
-            <button type="button" class="quick-button quick-new" id="quick-new" aria-expanded="false" aria-controls="quick-form"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>새 분류</button>
-            <button type="button" class="quick-button quick-more" id="quick-more" hidden>모든 분류</button>
-          </div>
-          <form id="quick-form" class="quick-form" hidden>
-            <label for="quick-name">새 분류 이름</label>
-            <input type="text" id="quick-name" maxlength="20" placeholder="예: 웹사이트" required>
-            <button type="submit" class="primary">만들고 추가</button>
-          </form>
-        </section>
       </section>
 
       <div id="mobile-nav" class="mobile-nav" aria-label="메모 보기"></div>
@@ -96,7 +81,10 @@
         <div id="selection" class="selection-bar" hidden>
           <span id="selected-count"></span>
           <button type="button" class="plain-btn" id="select-all">표시된 메모 모두 선택</button>
-          <button type="button" class="soft-btn" id="batch-tags">분류 추가</button>
+          <div class="selection-actions">
+            <button type="button" class="soft-btn" id="batch-tags">분류 추가</button>
+            <button type="button" class="danger batch-danger" id="batch-delete">선택 삭제</button>
+          </div>
         </div>
         <div class="note-grid" id="notes"></div>
         <div id="empty" class="empty" hidden><svg class="icon"><use href="#i-inbox"/></svg><p id="empty-title"></p><button type="button" class="plain-btn" id="clear-search" hidden>검색 지우기</button></div>
@@ -117,13 +105,37 @@
     <noscript>모아를 사용하려면 브라우저에서 JavaScript를 켜 주세요.</noscript>
   </main>
 
+  <dialog id="capture-categories" class="capture-categories" aria-labelledby="capture-categories-title">
+    <div class="dialog-head">
+      <h2 id="capture-categories-title">어디에 분류할까요?</h2>
+      <button type="button" class="icon-btn" data-close aria-label="닫기"><svg class="icon"><use href="#i-close"/></svg></button>
+    </div>
+    <p id="capture-category-status" class="capture-category-status" role="status"></p>
+    <div class="quick-actions">
+      <div class="quick-options" id="quick-options"></div>
+      <button type="button" class="quick-button quick-new" id="quick-new" aria-expanded="false" aria-controls="quick-form"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>새 분류</button>
+      <button type="button" class="quick-button quick-more" id="quick-more" aria-expanded="false" aria-controls="quick-options" hidden>모든 분류</button>
+    </div>
+    <form id="quick-form" class="quick-form" hidden>
+      <label for="quick-name">새 분류 이름</label>
+      <input type="text" id="quick-name" maxlength="20" placeholder="예: 웹사이트" required>
+      <button type="submit" class="primary">만들고 추가</button>
+    </form>
+    <div class="quick-footer">
+      <button type="button" class="quick-button quick-dismiss" id="quick-dismiss">나중에</button>
+      <button type="button" class="quick-button primary" id="quick-view" hidden>분류 보기</button>
+    </div>
+  </dialog>
+
   <dialog id="editor" aria-labelledby="editor-title">
     <form id="editor-form">
       <div class="dialog-head">
         <h2 id="editor-title">메모 편집</h2>
         <button type="button" class="icon-btn" data-close aria-label="닫기"><svg class="icon"><use href="#i-close"/></svg></button>
       </div>
-      <label for="edit-body">메모 내용</label>
+      <label for="edit-title">제목 <span class="field-optional">선택</span></label>
+      <input type="text" id="edit-title" class="edit-title" maxlength="120" placeholder="메모 제목">
+      <label for="edit-body">내용</label>
       <textarea id="edit-body" rows="8" maxlength="20000" required></textarea>
       <div class="dialog-actions">
         <button type="button" id="delete-note" class="danger"><svg class="icon"><use href="#i-trash"/></svg>삭제</button>
@@ -131,6 +143,20 @@
       </div>
       <div id="delete-confirm" class="delete-confirm" hidden>
         <p>이 메모를 삭제할까요?</p><button type="button" id="cancel-delete" class="plain-btn">취소</button><button type="button" id="confirm-delete" class="danger">메모 삭제</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="batch-delete-dialog" aria-labelledby="batch-delete-title" aria-describedby="batch-delete-copy">
+    <form id="batch-delete-form">
+      <div class="dialog-head">
+        <h2 id="batch-delete-title"></h2>
+        <button type="button" class="icon-btn" data-close aria-label="닫기"><svg class="icon"><use href="#i-close"/></svg></button>
+      </div>
+      <p id="batch-delete-copy" class="dialog-copy">삭제한 메모는 복원할 수 없어요.</p>
+      <div class="dialog-actions end">
+        <button type="button" class="plain-btn" id="batch-delete-cancel" autofocus>취소</button>
+        <button type="submit" class="danger danger-solid">삭제</button>
       </div>
     </form>
   </dialog>

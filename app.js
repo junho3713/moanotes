@@ -1,9 +1,10 @@
 import { firebaseConfig } from "./firebase-config.js";
-import { localStore, openCloud } from "./storage.js?v=2";
+import { localStore, openCloud } from "./storage.js?v=3";
 
 const byId = (id) => document.getElementById(id);
 const maxTags = 20;
 const maxBatch = 400;
+const maxTitleLength = 120;
 const state = {
   notes: [], view: "all", query: "", oldestFirst: false,
   selecting: false, selected: new Set(), store: null,
@@ -22,6 +23,7 @@ const fullDate = new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeSty
 let toastTimer;
 let lastFocus = null;
 let capturePending = false;
+let batchDeleteIds = [];
 
 function node(name, className, content) {
   const item = document.createElement(name);
@@ -129,6 +131,8 @@ function showNewCategoryForm(show) {
 }
 
 function viewCategory(category) {
+  const dialog = byId("capture-categories");
+  if (dialog.open) dialog.close();
   state.query = "";
   byId("search").value = "";
   chooseView("tag:" + category);
@@ -137,7 +141,6 @@ function viewCategory(category) {
 
 function drawQuickCategories() {
   const capture = state.recentCapture;
-  byId("capture-categories").hidden = !capture;
   if (!capture) return;
 
   const note = state.notes.find(({ id }) => id === capture.id);
@@ -145,10 +148,11 @@ function drawQuickCategories() {
   const latest = attached.includes(capture.category) ? [capture.category] : [];
   const categories = [...new Set([...latest, ...attached, ...recentCategories()])];
   const status = byId("capture-category-status");
-  const message = capture.category ? "‘" + capture.category + "’에 추가했어요." : "저장했어요. 분류를 추가할 수 있어요.";
+  const message = capture.category ? "‘" + capture.category + "’에 추가했어요." : "메모를 저장했어요.";
   if (status.textContent !== message) status.textContent = message;
 
-  byId("quick-options").replaceChildren(...categories.slice(0, 4).map((category) => {
+  const visibleCategories = capture.expanded ? categories : categories.slice(0, 4);
+  byId("quick-options").replaceChildren(...visibleCategories.map((category) => {
     const added = attached.includes(category);
     const choice = button("quick-button quick-option " + palette(category), undefined, () => {
       if (added) viewCategory(category);
@@ -163,18 +167,23 @@ function drawQuickCategories() {
     return choice;
   }));
   byId("quick-new").disabled = capture.saving;
-  byId("quick-more").hidden = !note || categories.length <= 4;
+  byId("quick-more").hidden = categories.length <= 4;
   byId("quick-more").disabled = capture.saving;
+  byId("quick-more").setAttribute("aria-expanded", String(capture.expanded));
+  byId("quick-more").textContent = capture.expanded ? "분류 접기" : "모든 분류";
   byId("quick-view").hidden = !latest.length;
+  byId("quick-dismiss").textContent = capture.category ? "완료" : "나중에";
   byId("quick-form").querySelector("button").disabled = capture.saving;
 }
 
 async function applyQuickCategory(entered) {
   const capture = state.recentCapture;
   if (!capture || capture.saving) return;
+  const dialog = byId("capture-categories");
+  dialog.querySelector(".dialog-feedback")?.remove();
   const name = entered.trim().normalize("NFC");
   if (!name) {
-    toast("분류 이름을 입력해 주세요.", true);
+    announce("분류 이름을 입력해 주세요.", dialog);
     byId("quick-name").focus();
     return;
   }
@@ -182,12 +191,12 @@ async function applyQuickCategory(entered) {
   const note = state.notes.find(({ id }) => id === capture.id);
   const alreadyAdded = note?.tags.includes(category);
   if (!alreadyAdded && note?.tags.length >= maxTags) {
-    toast("메모 하나에 분류를 20개까지 붙일 수 있어요.", true);
+    announce("메모 하나에 분류를 20개까지 붙일 수 있어요.", dialog);
     return;
   }
   capture.saving = true;
   drawQuickCategories();
-  const saved = alreadyAdded || await save(() => state.store.addTags([capture.id], [category], Date.now()));
+  const saved = alreadyAdded || await save(() => state.store.addTags([capture.id], [category], Date.now()), undefined, dialog);
   if (state.recentCapture !== capture) return;
   capture.saving = false;
   if (saved) {
@@ -206,7 +215,7 @@ function visibleNotes() {
   const terms = normalize(state.query).split(/\s+/u).filter(Boolean);
   return state.notes.filter((note) => {
     if (!matchesView(note)) return false;
-    const haystack = normalize([note.body, ...note.tags].join(" "));
+    const haystack = normalize([note.title, note.body, ...note.tags].join(" "));
     return terms.every((term) => haystack.includes(term));
   }).sort((a, b) => (state.oldestFirst ? a.createdAt - b.createdAt : b.createdAt - a.createdAt)
     || a.id.localeCompare(b.id));
@@ -220,7 +229,8 @@ function drawNote(note) {
   const date = node("time", "", noteDate.format(note.createdAt));
   date.dateTime = new Date(note.createdAt).toISOString();
   date.title = fullDate.format(note.createdAt);
-  const [title, ...rest] = note.body.split(/\r?\n/u);
+  const [firstLine, ...rest] = note.body.split(/\r?\n/u);
+  const title = note.title || firstLine;
   if (state.selecting) {
     const check = node("input", "note-check");
     check.type = "checkbox";
@@ -247,7 +257,7 @@ function drawNote(note) {
   ));
   content.dataset.focusKey = "note-" + note.id;
   content.append(node("span", "note-title", title));
-  const preview = rest.join("\n").trim();
+  const preview = (note.title ? note.body : rest.join("\n")).trim();
   if (preview) content.append(node("span", "note-snippet", preview));
   const foot = node("div", "note-foot");
   for (const tag of note.tags) foot.append(button("chip " + palette(tag), tag, () => chooseView("tag:" + tag)));
@@ -282,6 +292,7 @@ function render() {
   byId("select-all").textContent = visible.length && state.selected.size === visible.length
     ? "전체 선택 해제" : "표시된 메모 모두 선택";
   byId("batch-tags").disabled = !state.selected.size;
+  byId("batch-delete").disabled = !state.selected.size;
   byId("select").setAttribute("aria-pressed", String(state.selecting));
   if (focusKey) document.querySelector("[data-focus-key='" + CSS.escape(focusKey) + "']")?.focus({ preventScroll: true });
 }
@@ -292,9 +303,11 @@ function toggleSelection(id) {
   render();
 }
 
-async function save(action, form) {
+async function save(action, form, errorDialog = form?.closest("dialog")) {
   if (!state.store) {
-    toast("메모 저장소에 연결한 뒤 다시 시도해 주세요.", true);
+    const message = "메모 저장소에 연결한 뒤 다시 시도해 주세요.";
+    if (errorDialog) announce(message, errorDialog);
+    else toast(message, true);
     return false;
   }
   const controls = form ? [...form.querySelectorAll("button")].filter((item) => !item.disabled) : [];
@@ -307,7 +320,7 @@ async function save(action, form) {
     const message = error.message === "offline" ? "인터넷 연결을 확인해 주세요."
       : error.code === "permission-denied" ? "이 계정의 메모 저장 권한을 확인해 주세요."
       : "저장하지 못했어요. 잠시 후 다시 시도해 주세요.";
-    if (form?.closest("dialog")) announce(message, form.closest("dialog"));
+    if (errorDialog) announce(message, errorDialog);
     else toast(message, true);
     return false;
   } finally {
@@ -321,7 +334,7 @@ function announce(message, dialog) {
   if (!feedback) {
     feedback = node("p", "dialog-feedback");
     feedback.setAttribute("role", "alert");
-    (dialog.querySelector("form") || dialog).append(feedback);
+    dialog.append(feedback);
   }
   feedback.textContent = message;
 }
@@ -335,6 +348,7 @@ function openDialog(id) {
 
 function showEditor(note) {
   state.editingId = note.id;
+  byId("edit-title").value = note.title ?? "";
   byId("edit-body").value = note.body;
   byId("delete-confirm").hidden = true;
   openDialog("editor");
@@ -377,9 +391,9 @@ function addDraftTag() {
   drawTagOptions();
 }
 
-function noteData(body) {
+function noteData(body, title) {
   const now = Date.now();
-  return { body, tags: [], pinned: false, createdAt: now, updatedAt: now };
+  return { title, body, tags: [], pinned: false, createdAt: now, updatedAt: now };
 }
 
 function exportNotes() {
@@ -400,6 +414,7 @@ function fingerprint(note) {
 function validateNote(note) {
   const validDate = (value) => Number.isSafeInteger(value) && value > 0 && value < 8.64e15;
   return note && typeof note.body === "string" && note.body.trim() && note.body.length <= 20000
+    && (!Object.hasOwn(note, "title") || (typeof note.title === "string" && note.title.length <= maxTitleLength))
     && Array.isArray(note.tags) && note.tags.length <= maxTags
     && note.tags.every((tag) => typeof tag === "string" && tag.trim() && tag.length <= 20)
     && typeof note.pinned === "boolean" && validDate(note.createdAt) && validDate(note.updatedAt);
@@ -420,6 +435,7 @@ async function importNotes(file) {
       if (known.has(key)) continue;
       known.add(key);
       fresh.push({
+        title: note.title?.trim() ?? "",
         body: note.body.trim(), tags: [...new Set(note.tags.map((tag) => tag.trim()))],
         pinned: note.pinned, createdAt: note.createdAt, updatedAt: note.updatedAt,
       });
@@ -459,21 +475,25 @@ byId("capture-body").addEventListener("keydown", (event) => {
 byId("capture-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const input = byId("capture-body");
+  const titleInput = byId("capture-title");
+  const titleDraft = titleInput.value;
   const draft = input.value;
   const body = draft.trim();
   if (!body || byId("capture-submit").disabled) return;
   capturePending = true;
   const store = state.store;
   let id;
-  const saved = await save(async () => { id = await store.add(noteData(body)); }, event.currentTarget);
+  const saved = await save(async () => { id = await store.add(noteData(body, titleDraft.trim())); }, event.currentTarget);
   capturePending = false;
   if (saved && state.store === store) {
     if (input.value === draft) input.value = "";
+    if (titleInput.value === titleDraft) titleInput.value = "";
     showNewCategoryForm(false);
-    state.recentCapture = { id, category: null, saving: false };
+    state.recentCapture = { id, category: null, saving: false, expanded: false };
     state.query = "";
     byId("search").value = "";
     chooseView("all");
+    openDialog("capture-categories");
   }
   updateCaptureButton();
 });
@@ -483,7 +503,15 @@ byId("quick-view").addEventListener("click", () => {
   if (category) viewCategory(category);
 });
 byId("quick-more").addEventListener("click", () => {
-  if (state.recentCapture) showTags([state.recentCapture.id]);
+  const capture = state.recentCapture;
+  if (!capture) return;
+  capture.expanded = !capture.expanded;
+  drawQuickCategories();
+});
+byId("quick-dismiss").addEventListener("click", () => byId("capture-categories").close());
+byId("capture-categories").addEventListener("close", () => {
+  state.recentCapture = null;
+  showNewCategoryForm(false);
 });
 byId("quick-form").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -518,6 +546,36 @@ byId("select-all").addEventListener("click", () => {
   render();
 });
 byId("batch-tags").addEventListener("click", () => showTags([...state.selected]));
+byId("batch-delete").addEventListener("click", () => {
+  if (!state.selected.size) return;
+  if (state.selected.size > maxBatch) {
+    toast("한 번에 메모 400개까지 삭제할 수 있어요.", true);
+    return;
+  }
+  batchDeleteIds = [...state.selected];
+  byId("batch-delete-title").textContent = "선택한 메모 " + batchDeleteIds.length + "개를 삭제할까요?";
+  openDialog("batch-delete-dialog");
+});
+byId("batch-delete-cancel").addEventListener("click", () => byId("batch-delete-dialog").close());
+byId("batch-delete-dialog").addEventListener("cancel", (event) => {
+  if (byId("batch-delete-cancel").disabled) event.preventDefault();
+});
+byId("batch-delete-dialog").addEventListener("close", () => { batchDeleteIds = []; });
+byId("batch-delete-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!batchDeleteIds.length || form.querySelector("[type=submit]").disabled) return;
+  const ids = batchDeleteIds;
+  const store = state.store;
+  const deleted = await save(() => store.removeMany(ids), form);
+  if (!deleted || state.store !== store) return;
+  const dialog = byId("batch-delete-dialog");
+  state.selected.clear();
+  render();
+  dialog.close();
+  byId("select").focus({ preventScroll: true });
+  toast("메모 " + ids.length + "개를 삭제했어요.");
+});
 byId("add-tag").addEventListener("click", addDraftTag);
 byId("new-tag").addEventListener("keydown", (event) => {
   if (!event.isComposing && event.key === "Enter" && event.currentTarget.value.trim()) {
@@ -549,12 +607,13 @@ byId("tag-form").addEventListener("submit", async (event) => {
 });
 byId("editor-form").addEventListener("submit", async (event) => {
   event.preventDefault();
+  const title = byId("edit-title").value.trim();
   const body = byId("edit-body").value.trim();
   if (!body) {
     announce("메모 내용을 입력해 주세요.", byId("editor"));
     return;
   }
-  if (await save(() => state.store.update(state.editingId, { body, updatedAt: Date.now() }), event.currentTarget)) {
+  if (await save(() => state.store.update(state.editingId, { title, body, updatedAt: Date.now() }), event.currentTarget)) {
     byId("editor").close();
     toast("메모를 수정했어요.");
   }
@@ -607,6 +666,7 @@ function onNotes(notes, metadata) {
   if (recentId && state.notes.some(({ id }) => id === recentId) && !notes.some(({ id }) => id === recentId)) {
     state.recentCapture = null;
     showNewCategoryForm(false);
+    if (byId("capture-categories").open) byId("capture-categories").close();
   }
   state.notes = notes;
   if (metadata) {
@@ -663,6 +723,7 @@ async function start() {
       state.query = "";
       byId("search").value = "";
       byId("capture-body").value = "";
+      byId("capture-title").value = "";
       updateCaptureButton();
       for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
       if (!user) {
