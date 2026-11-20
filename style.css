@@ -71,12 +71,12 @@ main { margin-left: var(--rail-width); }
 dialog.capture-categories { width: min(540px, calc(100% - 32px)); }
 .category-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 .category-heading h2 { font-size: clamp(19px, 4vw, 22px); line-height: 1.3; letter-spacing: -.03em; }
-.category-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 168px; max-width: 100%; flex: 0 0 auto; margin-inline-start: auto; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 11px; background: var(--rail); }
-.category-modes button { display: flex; align-items: center; justify-content: center; gap: 3px; min-height: 48px; padding: 4px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 650; font-size: 13px; white-space: nowrap; }
+.category-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 192px; max-width: 100%; flex: 0 0 auto; margin-inline-start: auto; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 999px; background: var(--rail); }
+.category-modes button { display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 48px; padding: 6px 7px; border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--muted); font-weight: 650; font-size: 13px; white-space: nowrap; }
 .category-modes button:hover { background: var(--sheet); }
 .category-modes button[aria-pressed="true"] { border-color: #303f34; background: var(--green); color: var(--sheet); font-weight: 800; }
-.category-modes .icon { width: 14px; height: 14px; stroke-width: 2; visibility: hidden; }
-.category-modes button[aria-pressed="true"] .icon { visibility: visible; }
+.category-modes .icon { display: none; width: 14px; height: 14px; stroke-width: 2; }
+.category-modes button[aria-pressed="true"] .icon { display: block; }
 .capture-category-status, .capture-mode-hint { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
 .capture-mode-hint { margin-top: 3px; }
 .quick-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
