@@ -8,8 +8,8 @@
   <meta name="description" content="모아에서 생각을 빠르게 기록하고, 주제로 모아보세요.">
   <title>모아 — 개인 메모장</title>
   <link rel="icon" href="./moa.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=3">
-  <script type="module" src="./app.js?v=3"></script>
+  <link rel="stylesheet" href="./style.css?v=4">
+  <script type="module" src="./app.js?v=4"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -105,12 +105,16 @@
     <noscript>모아를 사용하려면 브라우저에서 JavaScript를 켜 주세요.</noscript>
   </main>
 
-  <dialog id="capture-categories" class="capture-categories" aria-labelledby="capture-categories-title">
-    <div class="dialog-head">
+  <dialog id="capture-categories" class="capture-categories" aria-labelledby="capture-categories-title" aria-describedby="capture-mode-hint">
+    <div class="category-heading">
       <h2 id="capture-categories-title">어디에 분류할까요?</h2>
-      <button type="button" class="icon-btn" data-close aria-label="닫기"><svg class="icon"><use href="#i-close"/></svg></button>
+      <div class="category-modes" role="group" aria-label="분류 방식">
+        <button type="button" id="category-single" aria-pressed="true" autofocus><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>한 곳에</button>
+        <button type="button" id="category-multiple" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>여러 곳에</button>
+      </div>
     </div>
     <p id="capture-category-status" class="capture-category-status" role="status"></p>
+    <p id="capture-mode-hint" class="capture-mode-hint"></p>
     <div class="quick-actions">
       <div class="quick-options" id="quick-options"></div>
       <button type="button" class="quick-button quick-new" id="quick-new" aria-expanded="false" aria-controls="quick-form"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>새 분류</button>
@@ -119,11 +123,11 @@
     <form id="quick-form" class="quick-form" hidden>
       <label for="quick-name">새 분류 이름</label>
       <input type="text" id="quick-name" maxlength="20" placeholder="예: 웹사이트" required>
-      <button type="submit" class="primary">만들고 추가</button>
+      <button type="submit" class="primary" id="quick-create">만들고 추가</button>
     </form>
     <div class="quick-footer">
       <button type="button" class="quick-button quick-dismiss" id="quick-dismiss">나중에</button>
-      <button type="button" class="quick-button primary" id="quick-view" hidden>분류 보기</button>
+      <button type="button" class="quick-button primary" id="quick-apply" hidden disabled>선택한 분류에 추가</button>
     </div>
   </dialog>
 

@@ -142,27 +142,43 @@ function viewCategory(category) {
 function drawQuickCategories() {
   const capture = state.recentCapture;
   if (!capture) return;
-
-  const note = state.notes.find(({ id }) => id === capture.id);
-  const attached = note?.tags ?? [];
-  const latest = attached.includes(capture.category) ? [capture.category] : [];
-  const categories = [...new Set([...latest, ...attached, ...recentCategories()])];
+  const categories = [...new Set([...capture.newCategories, ...recentCategories()])];
   const status = byId("capture-category-status");
-  const message = capture.category ? "‘" + capture.category + "’에 추가했어요." : "메모를 저장했어요.";
+  const message = capture.saving ? "분류에 추가하는 중이에요." : "메모를 저장했어요.";
   if (status.textContent !== message) status.textContent = message;
+  byId("capture-mode-hint").textContent = !categories.length
+    ? "새 분류를 만들거나 나중에 분류할 수 있어요."
+    : capture.multiple ? "원하는 분류를 고른 뒤 아래 버튼을 눌러 주세요."
+      : "분류를 누르면 해당 목록으로 바로 이동해요.";
+
+  for (const [id, pressed] of [["category-single", !capture.multiple], ["category-multiple", capture.multiple]]) {
+    const control = byId(id);
+    control.setAttribute("aria-pressed", String(pressed));
+    control.disabled = capture.saving;
+  }
 
   const visibleCategories = capture.expanded ? categories : categories.slice(0, 4);
   byId("quick-options").replaceChildren(...visibleCategories.map((category) => {
-    const added = attached.includes(category);
+    const selected = capture.selected.has(category);
     const choice = button("quick-button quick-option " + palette(category), undefined, () => {
-      if (added) viewCategory(category);
-      else void applyQuickCategory(category);
+      if (capture.multiple) {
+        if (selected) capture.selected.delete(category);
+        else selectQuickCategory(capture, category);
+        drawQuickCategories();
+        focusQuickCategory(category);
+      } else {
+        void saveQuickCategories([category], category);
+      }
     });
     choice.dataset.focusKey = "quick-" + category;
-    choice.dataset.added = String(added);
-    choice.setAttribute("aria-label", category + (added ? " 분류 보기" : " 분류에 추가"));
     choice.disabled = capture.saving;
-    if (added) choice.append(icon("check"));
+    if (capture.multiple) {
+      choice.setAttribute("aria-pressed", String(selected));
+      const marker = node("span", "quick-check");
+      marker.setAttribute("aria-hidden", "true");
+      if (selected) marker.append(icon("check"));
+      choice.append(marker);
+    }
     choice.append(category);
     return choice;
   }));
@@ -171,42 +187,97 @@ function drawQuickCategories() {
   byId("quick-more").disabled = capture.saving;
   byId("quick-more").setAttribute("aria-expanded", String(capture.expanded));
   byId("quick-more").textContent = capture.expanded ? "분류 접기" : "모든 분류";
-  byId("quick-view").hidden = !latest.length;
-  byId("quick-dismiss").textContent = capture.category ? "완료" : "나중에";
-  byId("quick-form").querySelector("button").disabled = capture.saving;
+  byId("quick-dismiss").disabled = capture.saving;
+  byId("quick-name").disabled = capture.saving;
+  byId("quick-create").disabled = capture.saving;
+  byId("quick-create").textContent = capture.multiple ? "만들고 선택" : "만들고 추가";
+  const apply = byId("quick-apply");
+  apply.hidden = !capture.multiple;
+  apply.disabled = !capture.selected.size || capture.saving;
+  apply.textContent = capture.selected.size ? capture.selected.size + "곳에 추가" : "선택한 분류에 추가";
 }
 
-async function applyQuickCategory(entered) {
-  const capture = state.recentCapture;
-  if (!capture || capture.saving) return;
+function focusQuickCategory(category) {
+  document.querySelector("[data-focus-key='" + CSS.escape("quick-" + category) + "']")?.focus({ preventScroll: true });
+}
+
+function selectQuickCategory(capture, category) {
   const dialog = byId("capture-categories");
   dialog.querySelector(".dialog-feedback")?.remove();
-  const name = entered.trim().normalize("NFC");
-  if (!name) {
-    announce("분류 이름을 입력해 주세요.", dialog);
-    byId("quick-name").focus();
-    return;
+  if (!capture.selected.has(category) && capture.selected.size >= maxTags) {
+    announce("메모 하나에 분류를 20개까지 붙일 수 있어요.", dialog);
+    return false;
   }
-  const category = recentCategories().find((tag) => normalize(tag) === normalize(name)) ?? name;
+  capture.selected.add(category);
+  return true;
+}
+
+async function saveQuickCategories(categories, destination) {
+  const capture = state.recentCapture;
+  if (!capture || capture.saving || !categories.length) return;
+  const dialog = byId("capture-categories");
+  dialog.querySelector(".dialog-feedback")?.remove();
   const note = state.notes.find(({ id }) => id === capture.id);
-  const alreadyAdded = note?.tags.includes(category);
-  if (!alreadyAdded && note?.tags.length >= maxTags) {
+  const attached = new Set(note?.tags ?? []);
+  const additions = categories.filter((category) => !attached.has(category));
+  if (attached.size + additions.length > maxTags) {
     announce("메모 하나에 분류를 20개까지 붙일 수 있어요.", dialog);
     return;
   }
+  const focused = document.activeElement;
   capture.saving = true;
   drawQuickCategories();
-  const saved = alreadyAdded || await save(() => state.store.addTags([capture.id], [category], Date.now()), undefined, dialog);
+  const saved = !additions.length || await save(() => state.store.addTags([capture.id], additions, Date.now()), undefined, dialog);
   if (state.recentCapture !== capture) return;
   capture.saving = false;
-  if (saved) {
-    capture.category = category;
-    showNewCategoryForm(false);
+  if (!saved) {
+    drawQuickCategories();
+    if (focused?.isConnected) focused.focus({ preventScroll: true });
+    else if (destination) focusQuickCategory(destination);
+    return;
   }
+  if (destination) {
+    viewCategory(destination);
+    toast("‘" + destination + "’에 추가했어요.");
+  } else {
+    dialog.close();
+    chooseView("all");
+    toast("메모를 " + categories.length + "곳에 추가했어요.");
+  }
+}
+
+function createQuickCategory() {
+  const capture = state.recentCapture;
+  if (!capture || capture.saving) return;
+  const input = byId("quick-name");
+  const dialog = byId("capture-categories");
+  const name = input.value.trim().normalize("NFC");
+  if (!name) {
+    announce("분류 이름을 입력해 주세요.", dialog);
+    input.focus();
+    return;
+  }
+  const known = [...capture.newCategories, ...recentCategories()];
+  const existing = known.find((category) => normalize(category) === normalize(name));
+  const category = existing ?? name;
+  if (!capture.multiple) {
+    void saveQuickCategories([category], category);
+    return;
+  }
+  if (!selectQuickCategory(capture, category)) return;
+  if (!existing) capture.newCategories.unshift(category);
+  if (existing && known.indexOf(existing) >= 4) capture.expanded = true;
+  showNewCategoryForm(false);
   drawQuickCategories();
-  if (saved) {
-    document.querySelector("[data-focus-key='" + CSS.escape("quick-" + category) + "']")?.focus({ preventScroll: true });
-  }
+  focusQuickCategory(category);
+}
+
+function changeQuickMode(multiple) {
+  const capture = state.recentCapture;
+  if (!capture || capture.saving || capture.multiple === multiple) return;
+  capture.multiple = multiple;
+  byId("capture-categories").querySelector(".dialog-feedback")?.remove();
+  drawQuickCategories();
 }
 
 function visibleNotes() {
@@ -489,7 +560,9 @@ byId("capture-form").addEventListener("submit", async (event) => {
     if (input.value === draft) input.value = "";
     if (titleInput.value === titleDraft) titleInput.value = "";
     showNewCategoryForm(false);
-    state.recentCapture = { id, category: null, saving: false, expanded: false };
+    state.recentCapture = {
+      id, multiple: false, selected: new Set(), newCategories: [], saving: false, expanded: false,
+    };
     state.query = "";
     byId("search").value = "";
     chooseView("all");
@@ -498,9 +571,10 @@ byId("capture-form").addEventListener("submit", async (event) => {
   updateCaptureButton();
 });
 byId("quick-new").addEventListener("click", () => showNewCategoryForm(byId("quick-form").hidden));
-byId("quick-view").addEventListener("click", () => {
-  const category = state.recentCapture?.category;
-  if (category) viewCategory(category);
+byId("category-single").addEventListener("click", () => changeQuickMode(false));
+byId("category-multiple").addEventListener("click", () => changeQuickMode(true));
+byId("quick-apply").addEventListener("click", () => {
+  if (state.recentCapture?.multiple) void saveQuickCategories([...state.recentCapture.selected]);
 });
 byId("quick-more").addEventListener("click", () => {
   const capture = state.recentCapture;
@@ -509,13 +583,16 @@ byId("quick-more").addEventListener("click", () => {
   drawQuickCategories();
 });
 byId("quick-dismiss").addEventListener("click", () => byId("capture-categories").close());
+byId("capture-categories").addEventListener("cancel", (event) => {
+  if (state.recentCapture?.saving) event.preventDefault();
+});
 byId("capture-categories").addEventListener("close", () => {
   state.recentCapture = null;
   showNewCategoryForm(false);
 });
 byId("quick-form").addEventListener("submit", (event) => {
   event.preventDefault();
-  void applyQuickCategory(byId("quick-name").value);
+  createQuickCategory();
 });
 byId("search").addEventListener("input", (event) => {
   state.query = event.target.value;
@@ -645,7 +722,7 @@ byId("backup-file").addEventListener("change", async (event) => {
   try { await importNotes(file); } finally { byId("upload").disabled = false; }
 });
 for (const dialog of document.querySelectorAll("dialog")) {
-  dialog.querySelector("[data-close]").addEventListener("click", () => dialog.close());
+  dialog.querySelector("[data-close]")?.addEventListener("click", () => dialog.close());
   dialog.addEventListener("close", () => {
     if (lastFocus?.isConnected) lastFocus.focus();
     else if (lastFocus?.dataset.focusKey) {
