@@ -1,4 +1,5 @@
 import { firebaseConfig } from "./firebase-config.js";
+import { createRelatedNotes } from "./related-notes.js?v=18";
 import { localStore, openCloud } from "./storage.js?v=15";
 import { maxPhotoBytes, maxThumbnailBytes, photoParts, preparePhoto } from "./images.js?v=6";
 
@@ -49,6 +50,14 @@ let batchDeleteIds = [];
 let photoViewerRequest = 0;
 let backupRequest = 0;
 const backupUrls = [];
+const relatedNotes = createRelatedNotes({
+  root: byId("related-notes"),
+  titleInput: byId("capture-title"),
+  bodyInput: byId("capture-body"),
+  getNotes: () => state.notes,
+  getWorker: ensureClassificationWorker,
+  openNote: showEditor,
+});
 
 function node(name, className, content) {
   const item = document.createElement(name);
@@ -109,6 +118,7 @@ function showPanel(writing) {
   setSortOpen(false);
   composer.hidden = !writing;
   byId("browse-panel").hidden = writing;
+  relatedNotes.setVisible(writing);
   for (const button of workspaceButtons) {
     button.setAttribute("aria-pressed", String((button.dataset.workspacePanel === "write") === writing));
   }
@@ -208,7 +218,27 @@ function resetClassificationWorker() {
   classificationWorker?.terminate();
   classificationWorker = undefined;
   classifierReady = false;
+  relatedNotes.workerReset();
   renderClassificationMode();
+}
+
+function ensureClassificationWorker() {
+  if (!classificationWorker) {
+    classificationWorker = new Worker(new URL("./classifier-worker.js?v=18", import.meta.url), { type: "module" });
+    classificationWorker.addEventListener("message", (event) => {
+      if (event.data.type === "ready") {
+        classifierReady = true;
+        renderClassificationMode();
+      }
+      if (event.data.task === "related") relatedNotes.receive(event);
+      else handleClassification(event);
+    });
+    classificationWorker.addEventListener("error", () => {
+      resetClassificationWorker();
+      if (state.recentCapture?.aiRequest) classificationFailed(state.recentCapture);
+    });
+  }
+  return classificationWorker;
 }
 
 function handleClassification({ data: { request, type, ranked } }) {
@@ -252,14 +282,7 @@ function startAutomaticCategory(capture, title, body) {
     return;
   }
   try {
-    if (!classificationWorker) {
-      classificationWorker = new Worker(new URL("./classifier-worker.js?v=16", import.meta.url), { type: "module" });
-      classificationWorker.addEventListener("message", handleClassification);
-      classificationWorker.addEventListener("error", () => {
-        resetClassificationWorker();
-        if (state.recentCapture?.aiRequest) classificationFailed(state.recentCapture);
-      });
-    }
+    ensureClassificationWorker();
     capture.aiRequest = ++classificationRequest;
     setClassificationStatus(capture, classifierReady ? "AI가 기존 메모와 비교하고 있어요." : "AI 모델을 준비하고 있어요. 먼저 분류를 골라도 돼요.");
     capture.aiTimeout = setTimeout(() => {
@@ -987,6 +1010,7 @@ byId("capture-form").addEventListener("submit", async (event) => {
     if (input.value === draft) input.value = "";
     if (titleInput.value === titleDraft) titleInput.value = "";
     capturePhoto.reset();
+    relatedNotes.draftChanged();
     showNewCategoryForm(false);
     const capture = {
       id, multiple: false, selected: new Set(), newCategories: [], saving: false, expanded: false,
@@ -1231,6 +1255,7 @@ function onNotes(notes, metadata) {
     if (byId("capture-categories").open) byId("capture-categories").close();
   }
   state.notes = notes;
+  relatedNotes.notesChanged();
   if (metadata) {
     if (metadata.hasPendingWrites) setConnection("저장 중");
     else if (metadata.fromCache) setConnection("연결 확인 중", true);
@@ -1247,6 +1272,7 @@ function onStorageError(error) {
 }
 
 function resetWorkspaceSession() {
+  relatedNotes.reset();
   state.store?.disconnect();
   state.store = null;
   state.notes = [];
