@@ -229,21 +229,18 @@ function handleClassification({ data: { request, type, ranked } }) {
   if (type !== "result") return;
 
   cancelAutomaticCategory(capture);
-  const available = new Set(recentCategories());
-  const [[category, score] = [], [, nextScore] = []] = ranked.filter(([name]) => available.has(name));
   const current = state.notes.find(({ id }) => id === capture.id);
-  if (!current || current.tags.length || !category || score < 0.79) {
-    setClassificationStatus(capture, "확실한 분류를 찾지 못했어요. 직접 골라 주세요.");
+  if (current?.tags.length) {
+    finishCaptureInView("tag:" + current.tags[0]);
     return;
   }
-  capture.aiSuggestion = category;
-  setClassificationStatus(capture, "AI가 어울리는 분류를 찾았어요.");
-  // Cosine similarity is a heuristic. Apply just one label when the best match is clearly ahead.
-  if (nextScore === undefined ? score >= 0.91 : score >= 0.86 && score - nextScore >= 0.045) {
-    void saveQuickCategories([category], category, true);
-  } else {
-    drawQuickCategories();
+  const available = new Set(recentCategories());
+  const [category] = ranked.find(([name, score]) => available.has(name) && Number.isFinite(score)) ?? [];
+  if (!category) {
+    setClassificationStatus(capture, "분류할 곳을 찾지 못했어요. 직접 골라 주세요.");
+    return;
   }
+  void saveQuickCategories([category], category, true);
 }
 
 function startAutomaticCategory(capture, title, body) {
@@ -295,9 +292,7 @@ function finishCaptureInView(view) {
 function drawQuickCategories() {
   const capture = state.recentCapture;
   if (!capture) return;
-  const options = [...new Set([...capture.newCategories, ...recentCategories()])];
-  const suggested = options.includes(capture.aiSuggestion) ? capture.aiSuggestion : null;
-  const categories = suggested ? [suggested, ...options.filter((name) => name !== suggested)] : options;
+  const categories = [...new Set([...capture.newCategories, ...recentCategories()])];
   const status = byId("capture-category-status");
   const message = capture.saving ? "분류에 추가하는 중이에요." : capture.aiMessage || "메모를 저장했어요.";
   if (status.textContent !== message) status.textContent = message;
@@ -336,7 +331,6 @@ function drawQuickCategories() {
       choice.append(marker);
     }
     choice.append(category);
-    if (category === suggested) choice.append(node("span", "quick-recommendation", "AI 추천"));
     return choice;
   }));
   byId("quick-new").disabled = capture.saving;

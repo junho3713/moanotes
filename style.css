@@ -111,7 +111,6 @@ dialog.capture-categories { width: min(540px, calc(100% - 32px)); }
 .capture-categories .quick-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 56px; max-width: 100%; padding: 8px 13px; border: 1px solid transparent; border-radius: 10px; font-size: 15px; font-weight: 750; overflow-wrap: anywhere; text-align: center; }
 .quick-option { background: var(--tag-bg); color: var(--tag-fg); }
 .quick-option:hover, .quick-option[aria-pressed="true"] { border-color: var(--tag-dot); }
-.quick-option .quick-recommendation { padding: 1px 5px; border-radius: 5px; background: var(--sheet); font-size: 11px; white-space: nowrap; }
 .capture-categories .quick-new, .capture-categories .quick-more { color: var(--green-dark); border-color: #bdcdb9; background: var(--sheet); }
 .quick-new:hover, .quick-more:hover, .quick-new[aria-expanded="true"] { background: var(--tint); }
 .quick-button .icon { width: 18px; height: 18px; }
