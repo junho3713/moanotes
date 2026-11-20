@@ -2,6 +2,7 @@ import { relatedText, relatedCandidates } from "./semantic-search.js?v=18";
 
 export function createRelatedNotes({ root, toggle, queryInput, getNotes, getWorker, openNote, delay = 700 }) {
   const status = root.querySelector("[data-related-status]");
+  const find = root.querySelector("[data-related-find]");
   const retry = root.querySelector("[data-related-retry]");
   const results = root.querySelector("[data-related-results]");
   let enabled = false;
@@ -18,6 +19,7 @@ export function createRelatedNotes({ root, toggle, queryInput, getNotes, getWork
     status.textContent = message;
     // Announce status updates without hiding the off switch during a long first index.
     results.setAttribute("aria-busy", String(busy));
+    find.disabled = busy || composing;
   }
 
   function clearResults() {
@@ -32,6 +34,7 @@ export function createRelatedNotes({ root, toggle, queryInput, getNotes, getWork
     timeout = undefined;
     if (activeRequest !== null) worker?.postMessage({ task: "related-cancel", request: activeRequest });
     activeRequest = null;
+    find.disabled = composing;
   }
 
   function idleMessage() {
@@ -137,7 +140,15 @@ export function createRelatedNotes({ root, toggle, queryInput, getNotes, getWork
     if (enabled && !suspended) queryInput.focus();
   });
 
-  retry.addEventListener("click", schedule);
+  function findNow() {
+    cancel();
+    clearResults();
+    retry.hidden = true;
+    search();
+  }
+
+  find.addEventListener("click", findNow);
+  retry.addEventListener("click", findNow);
 
   for (const input of [queryInput]) {
     input.addEventListener("input", schedule);

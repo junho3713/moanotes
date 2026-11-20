@@ -298,7 +298,9 @@ dialog textarea { resize: vertical; max-height: 46dvh; }
 .related-query-label { display: block; margin-top: 12px; font-size: 14px; font-weight: 650; }
 .related-query { display: block; width: 100%; min-height: 96px; margin-top: 6px; padding: 10px 12px; resize: vertical; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); font-size: 16px; line-height: 1.6; }
 .related-query::placeholder { color: var(--quiet); opacity: 1; }
-.related-hint { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.related-search-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+.related-hint { flex: 1; min-width: 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.related-find { flex: 0 0 auto; min-width: 88px; min-height: 44px; white-space: nowrap; }
 .related-status { margin-top: 7px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 .related-results { list-style: none; display: grid; gap: 8px; padding: 0; margin: 12px 0 0; }
 .related-note { display: grid; gap: 4px; width: 100%; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); text-align: left; }

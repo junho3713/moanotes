@@ -1,5 +1,5 @@
 import { firebaseConfig } from "./firebase-config.js";
-import { createRelatedNotes } from "./related-notes.js?v=19";
+import { createRelatedNotes } from "./related-notes.js?v=20";
 import { localStore, openCloud } from "./storage.js?v=15";
 import { maxPhotoBytes, maxThumbnailBytes, photoParts, preparePhoto } from "./images.js?v=6";
 

@@ -8,8 +8,8 @@
   <meta name="description" content="모아에서 생각을 빠르게 기록하고, 주제로 모아보세요.">
   <title>모아 — 개인 메모장</title>
   <link rel="icon" href="./moa.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=19">
-  <script type="module" src="./app.js?v=19"></script>
+  <link rel="stylesheet" href="./style.css?v=20">
+  <script type="module" src="./app.js?v=20"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -120,7 +120,10 @@
           <h2 id="related-title">AI 탐색</h2>
           <label class="related-query-label" for="related-query">어떤 메모를 찾고 있나요?</label>
           <textarea id="related-query" class="related-query" rows="3" maxlength="1000" placeholder="떠오르는 생각을 적어보세요. 예: 퇴근 후 가볍게 배울 만한 것" aria-describedby="related-hint related-status"></textarea>
-          <p id="related-hint" class="related-hint">같은 단어가 없어도 의미가 가까운 메모를 찾아요. 처음 찾을 때 AI 모델 약 120MB를 내려받아요.</p>
+          <div class="related-search-actions">
+            <p id="related-hint" class="related-hint">같은 단어가 없어도 의미가 가까운 메모를 찾아요. 처음 찾을 때 AI 모델 약 120MB를 내려받아요.</p>
+            <button type="button" class="primary related-find" data-related-find aria-controls="related-results">찾기</button>
+          </div>
           <p id="related-status" class="related-status" data-related-status role="status" aria-live="polite"></p>
           <button type="button" class="plain-btn" data-related-retry hidden>다시 찾기</button>
           <ul id="related-results" class="related-results" data-related-results aria-label="생각과 관련된 메모" hidden></ul>

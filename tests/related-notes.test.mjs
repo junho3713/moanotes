@@ -20,7 +20,7 @@ test("semantic ranking and AI exploration lifecycle", () => {
     querySelector(selector) { return this.elements[selector]; }
     setAttribute(name, value) { this.attributes[name] = value; }
     addEventListener(name, handler) { const handlers = this.events.get(name) || []; handlers.push(handler); this.events.set(name, handlers); }
-    fire(name) { for (const handler of this.events.get(name) || []) handler({}); }
+    fire(name) { if (name === "click" && this.disabled) return; for (const handler of this.events.get(name) || []) handler({}); }
     replaceChildren(...children) { this.children = children; }
     append(...children) { this.children.push(...children); }
     focus() { this.focused = true; }
@@ -45,8 +45,8 @@ test("semantic ranking and AI exploration lifecycle", () => {
   output.push("semantic ranking: limits, ordering, weak matches, empty text");
   
   const root = new Element();
-  const toggle = new Element(), status = new Element(), results = new Element(), retry = new Element();
-  root.elements = { "[data-related-toggle]": toggle, "[data-related-status]": status, "[data-related-retry]": retry, "[data-related-results]": results };
+  const toggle = new Element(), status = new Element(), results = new Element(), retry = new Element(), find = new Element();
+  root.elements = { "[data-related-toggle]": toggle, "[data-related-status]": status, "[data-related-find]": find, "[data-related-retry]": retry, "[data-related-results]": results };
   const query = new Element();
   const timers = clock();
   const sent = [];
@@ -69,7 +69,13 @@ test("semantic ranking and AI exploration lifecycle", () => {
   assert(!root.hidden && toggle.attributes["aria-expanded"] === "true", "AI exploration expands");
   assert(query.focused, "opening panel focuses independent search field");
   same(timers.count(700), 1, "debounced search");
+  find.fire("click");
+  same(sent.filter((message) => message.task === "related").length, 1, "Find starts search immediately");
+  same(timers.count(700), 0, "Find clears the pending automatic search");
+  assert(find.disabled, "Find disabled while search is running");
+  find.fire("click");
   timers.run(700);
+  same(sent.filter((message) => message.task === "related").length, 1, "no duplicate searches");
   const first = sent.find((message) => message.task === "related");
   same(first.notes.map(({ id }) => id), ["a", "b"], "unfiltered corpus");
   assert(first.query.includes("오사카"), "independent input used as query");
@@ -82,6 +88,7 @@ test("semantic ranking and AI exploration lifecycle", () => {
   const second = sent.filter((message) => message.task === "related").at(-1);
   controller.receive({ data: { task: "related", request: second.request, type: "result", matches: [{ id: "a" }, { id: "b" }] } });
   same(results.children.length, 2, "results rendered");
+  assert(!find.disabled, "Find re-enabled after results");
   same(results.children[0].children[0].children[0].textContent, "<script>draft</script>", "titles rendered as text");
   results.children[0].children[0].fire("click");
   same(opened.id, "a", "result opens existing memo");
@@ -91,6 +98,8 @@ test("semantic ranking and AI exploration lifecycle", () => {
   output.push("exploration: opt-in, debounce, full corpus, cancellation, stale results, safe text and preserved query");
   
   query.fire("compositionstart");
+  assert(find.disabled, "Find waits for Korean IME composition");
+  find.fire("click");
   query.value = "여행 준비하는 중";
   query.fire("input");
   timers.run(700);
@@ -218,6 +227,7 @@ test("browser modules and All notes integration", async () => {
   assert.ok(!html.slice(writeStart, browseStart).includes('id="related-notes"'));
   assert.ok(html.slice(browseStart).includes('id="ai-explore"'));
   assert.ok(html.includes('id="capture-body" rows="16"'));
+  assert.ok(html.includes('class="primary related-find" data-related-find'));
   const css = await source("style.css");
   assert.ok(css.includes("min-height: clamp(360px, 56dvh, 760px); max-height: none;"));
   // Exercise the production visibility rule across the actual navigation states.
