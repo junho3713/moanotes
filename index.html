@@ -8,8 +8,8 @@
   <meta name="description" content="모아에서 생각을 빠르게 기록하고, 주제로 모아보세요.">
   <title>모아 — 개인 메모장</title>
   <link rel="icon" href="./moa.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css">
-  <script type="module" src="./app.js"></script>
+  <link rel="stylesheet" href="./style.css?v=2">
+  <script type="module" src="./app.js?v=2"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -34,8 +34,8 @@
       <p class="rail-heading">보관함</p>
       <nav id="folders" class="folders" aria-label="보관함"></nav>
       <div class="rail-topics">
-        <p class="rail-heading">태그</p>
-        <nav id="topics" class="topics" aria-label="태그"></nav>
+        <p class="rail-heading">분류</p>
+        <nav id="topics" class="topics" aria-label="분류"></nav>
       </div>
     </div>
     <div class="rail-footer" id="rail-footer" hidden>
@@ -63,6 +63,23 @@
             <button type="submit" id="capture-submit" class="primary"><svg class="icon"><use href="#i-plus"/></svg>메모 저장</button>
           </div>
         </form>
+        <section id="capture-categories" class="capture-categories" aria-label="방금 저장한 메모 분류" hidden>
+          <div class="capture-categories-head">
+            <svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>
+            <p id="capture-category-status" role="status"></p>
+            <button type="button" class="quick-button quick-view" id="quick-view" hidden>분류 보기</button>
+          </div>
+          <div class="quick-actions">
+            <div class="quick-options" id="quick-options"></div>
+            <button type="button" class="quick-button quick-new" id="quick-new" aria-expanded="false" aria-controls="quick-form"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>새 분류</button>
+            <button type="button" class="quick-button quick-more" id="quick-more" hidden>모든 분류</button>
+          </div>
+          <form id="quick-form" class="quick-form" hidden>
+            <label for="quick-name">새 분류 이름</label>
+            <input type="text" id="quick-name" maxlength="20" placeholder="예: 웹사이트" required>
+            <button type="submit" class="primary">만들고 추가</button>
+          </form>
+        </section>
       </section>
 
       <div id="mobile-nav" class="mobile-nav" aria-label="메모 보기"></div>
@@ -79,7 +96,7 @@
         <div id="selection" class="selection-bar" hidden>
           <span id="selected-count"></span>
           <button type="button" class="plain-btn" id="select-all">표시된 메모 모두 선택</button>
-          <button type="button" class="soft-btn" id="batch-tags">태그 추가</button>
+          <button type="button" class="soft-btn" id="batch-tags">분류 추가</button>
         </div>
         <div class="note-grid" id="notes"></div>
         <div id="empty" class="empty" hidden><svg class="icon"><use href="#i-inbox"/></svg><p id="empty-title"></p><button type="button" class="plain-btn" id="clear-search" hidden>검색 지우기</button></div>
@@ -121,11 +138,11 @@
   <dialog id="tag-dialog" aria-labelledby="tag-title">
     <form id="tag-form">
       <div class="dialog-head">
-        <h2 id="tag-title">태그 편집</h2>
+        <h2 id="tag-title">분류 편집</h2>
         <button type="button" class="icon-btn" data-close aria-label="닫기"><svg class="icon"><use href="#i-close"/></svg></button>
       </div>
       <div id="tag-options" class="tag-options"></div>
-      <label for="new-tag">새 태그</label>
+      <label for="new-tag">새 분류 이름</label>
       <div class="add-tag">
         <input type="text" id="new-tag" maxlength="20" placeholder="예: 웹사이트">
         <button type="button" id="add-tag" class="soft-btn">추가</button>

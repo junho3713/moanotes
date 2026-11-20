@@ -1,5 +1,5 @@
 import { firebaseConfig } from "./firebase-config.js";
-import { localStore, openCloud } from "./storage.js";
+import { localStore, openCloud } from "./storage.js?v=2";
 
 const byId = (id) => document.getElementById(id);
 const maxTags = 20;
@@ -8,6 +8,7 @@ const state = {
   notes: [], view: "all", query: "", oldestFirst: false,
   selecting: false, selected: new Set(), store: null,
   editingId: null, tagIds: [], draftTags: new Set(),
+  recentCapture: null,
 };
 const folders = [
   { id: "all", text: "모든 메모", icon: "notes", test: () => true },
@@ -15,8 +16,8 @@ const folders = [
   { id: "pinned", text: "고정", icon: "pin", test: (note) => note.pinned },
 ];
 const collator = new Intl.Collator("ko");
-const dateLabel = new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", weekday: "long" });
-const noteDate = new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric" });
+const dateLabel = new Intl.DateTimeFormat("ko-KR", { year: "2-digit", month: "long", day: "numeric", weekday: "long" });
+const noteDate = new Intl.DateTimeFormat("ko-KR", { year: "2-digit", month: "numeric", day: "numeric" });
 const fullDate = new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short" });
 let toastTimer;
 let lastFocus = null;
@@ -112,6 +113,93 @@ function normalize(text) {
   return text.normalize("NFKC").toLocaleLowerCase("ko-KR").trim();
 }
 
+function recentCategories() {
+  const categories = new Set();
+  for (const note of [...state.notes].sort((a, b) => b.updatedAt - a.updatedAt)) {
+    for (const category of note.tags) categories.add(category);
+  }
+  return [...categories];
+}
+
+function showNewCategoryForm(show) {
+  byId("quick-form").hidden = !show;
+  byId("quick-new").setAttribute("aria-expanded", String(show));
+  if (show) byId("quick-name").focus();
+  else byId("quick-name").value = "";
+}
+
+function viewCategory(category) {
+  state.query = "";
+  byId("search").value = "";
+  chooseView("tag:" + category);
+  byId("list-title").scrollIntoView({ block: "nearest" });
+}
+
+function drawQuickCategories() {
+  const capture = state.recentCapture;
+  byId("capture-categories").hidden = !capture;
+  if (!capture) return;
+
+  const note = state.notes.find(({ id }) => id === capture.id);
+  const attached = note?.tags ?? [];
+  const latest = attached.includes(capture.category) ? [capture.category] : [];
+  const categories = [...new Set([...latest, ...attached, ...recentCategories()])];
+  const status = byId("capture-category-status");
+  const message = capture.category ? "‘" + capture.category + "’에 추가했어요." : "저장했어요. 분류를 추가할 수 있어요.";
+  if (status.textContent !== message) status.textContent = message;
+
+  byId("quick-options").replaceChildren(...categories.slice(0, 4).map((category) => {
+    const added = attached.includes(category);
+    const choice = button("quick-button quick-option " + palette(category), undefined, () => {
+      if (added) viewCategory(category);
+      else void applyQuickCategory(category);
+    });
+    choice.dataset.focusKey = "quick-" + category;
+    choice.dataset.added = String(added);
+    choice.setAttribute("aria-label", category + (added ? " 분류 보기" : " 분류에 추가"));
+    choice.disabled = capture.saving;
+    if (added) choice.append(icon("check"));
+    choice.append(category);
+    return choice;
+  }));
+  byId("quick-new").disabled = capture.saving;
+  byId("quick-more").hidden = !note || categories.length <= 4;
+  byId("quick-more").disabled = capture.saving;
+  byId("quick-view").hidden = !latest.length;
+  byId("quick-form").querySelector("button").disabled = capture.saving;
+}
+
+async function applyQuickCategory(entered) {
+  const capture = state.recentCapture;
+  if (!capture || capture.saving) return;
+  const name = entered.trim().normalize("NFC");
+  if (!name) {
+    toast("분류 이름을 입력해 주세요.", true);
+    byId("quick-name").focus();
+    return;
+  }
+  const category = recentCategories().find((tag) => normalize(tag) === normalize(name)) ?? name;
+  const note = state.notes.find(({ id }) => id === capture.id);
+  const alreadyAdded = note?.tags.includes(category);
+  if (!alreadyAdded && note?.tags.length >= maxTags) {
+    toast("메모 하나에 분류를 20개까지 붙일 수 있어요.", true);
+    return;
+  }
+  capture.saving = true;
+  drawQuickCategories();
+  const saved = alreadyAdded || await save(() => state.store.addTags([capture.id], [category], Date.now()));
+  if (state.recentCapture !== capture) return;
+  capture.saving = false;
+  if (saved) {
+    capture.category = category;
+    showNewCategoryForm(false);
+  }
+  drawQuickCategories();
+  if (saved) {
+    document.querySelector("[data-focus-key='" + CSS.escape("quick-" + category) + "']")?.focus({ preventScroll: true });
+  }
+}
+
 function visibleNotes() {
   const folder = folders.find(({ id }) => id === state.view);
   const matchesView = folder ? folder.test : (note) => note.tags.includes(state.view.slice(4));
@@ -165,7 +253,7 @@ function drawNote(note) {
   for (const tag of note.tags) foot.append(button("chip " + palette(tag), tag, () => chooseView("tag:" + tag)));
   const edit = button("tag-edit", undefined, () => showTags([note.id]));
   edit.dataset.focusKey = "tags-" + note.id;
-  edit.append(icon(note.tags.length ? "tag" : "plus"), note.tags.length ? "편집" : "태그 추가");
+  edit.append(icon(note.tags.length ? "tag" : "plus"), note.tags.length ? "분류 편집" : "분류 추가");
   foot.append(edit);
   article.append(meta, content, foot);
   return article;
@@ -184,6 +272,7 @@ function render() {
   byId("note-count").textContent = visible.length + "개";
   renderNavigation(tags);
   byId("notes").replaceChildren(...visible.map(drawNote));
+  drawQuickCategories();
   byId("empty").hidden = visible.length > 0;
   byId("empty-title").textContent = state.query ? "검색 결과가 없어요." : "이 보기에 메모가 없어요.";
   byId("clear-search").hidden = !state.query;
@@ -255,7 +344,7 @@ function showEditor(note) {
 function showTags(ids) {
   state.tagIds = ids;
   state.draftTags = new Set(ids.length === 1 ? state.notes.find((note) => note.id === ids[0])?.tags : []);
-  byId("tag-title").textContent = ids.length === 1 ? "태그 편집" : ids.length + "개 메모에 태그 추가";
+  byId("tag-title").textContent = ids.length === 1 ? "분류 편집" : ids.length + "개 메모에 분류 추가";
   byId("new-tag").value = "";
   drawTagOptions();
   openDialog("tag-dialog");
@@ -374,16 +463,31 @@ byId("capture-form").addEventListener("submit", async (event) => {
   const body = draft.trim();
   if (!body || byId("capture-submit").disabled) return;
   capturePending = true;
-  const saved = await save(() => state.store.add(noteData(body)), event.currentTarget);
+  const store = state.store;
+  let id;
+  const saved = await save(async () => { id = await store.add(noteData(body)); }, event.currentTarget);
   capturePending = false;
-  if (saved) {
+  if (saved && state.store === store) {
     if (input.value === draft) input.value = "";
+    showNewCategoryForm(false);
+    state.recentCapture = { id, category: null, saving: false };
     state.query = "";
     byId("search").value = "";
     chooseView("all");
-    toast("메모를 저장했어요.");
   }
   updateCaptureButton();
+});
+byId("quick-new").addEventListener("click", () => showNewCategoryForm(byId("quick-form").hidden));
+byId("quick-view").addEventListener("click", () => {
+  const category = state.recentCapture?.category;
+  if (category) viewCategory(category);
+});
+byId("quick-more").addEventListener("click", () => {
+  if (state.recentCapture) showTags([state.recentCapture.id]);
+});
+byId("quick-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  void applyQuickCategory(byId("quick-name").value);
 });
 byId("search").addEventListener("input", (event) => {
   state.query = event.target.value;
@@ -432,7 +536,7 @@ byId("tag-form").addEventListener("submit", async (event) => {
     return;
   }
   if (ids.length > 1 && state.notes.some((note) => ids.includes(note.id) && new Set([...note.tags, ...changes]).size > maxTags)) {
-    announce("메모 하나에 태그를 20개까지 붙일 수 있어요.", dialog);
+    announce("메모 하나에 분류를 20개까지 붙일 수 있어요.", dialog);
     return;
   }
   const result = await save(() => ids.length === 1
@@ -440,7 +544,7 @@ byId("tag-form").addEventListener("submit", async (event) => {
     : changes.length && state.store.addTags(ids, changes, Date.now()), event.currentTarget);
   if (result) {
     dialog.close();
-    toast("태그를 적용했어요.");
+    toast("분류를 적용했어요.");
   }
 });
 byId("editor-form").addEventListener("submit", async (event) => {
@@ -499,6 +603,11 @@ function showWorkspace(show) {
 }
 
 function onNotes(notes, metadata) {
+  const recentId = state.recentCapture?.id;
+  if (recentId && state.notes.some(({ id }) => id === recentId) && !notes.some(({ id }) => id === recentId)) {
+    state.recentCapture = null;
+    showNewCategoryForm(false);
+  }
   state.notes = notes;
   if (metadata) {
     if (metadata.hasPendingWrites) setConnection("저장 중");
@@ -547,6 +656,8 @@ async function start() {
       state.store?.disconnect();
       state.store = null;
       state.notes = [];
+      state.recentCapture = null;
+      showNewCategoryForm(false);
       state.selected.clear();
       state.view = "all";
       state.query = "";

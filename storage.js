@@ -41,7 +41,11 @@ export function localStore(onChange, onError) {
   });
   refresh();
   return {
-    async add(note) { write((items) => [...items, { ...note, id: crypto.randomUUID() }]); },
+    async add(note) {
+      const id = crypto.randomUUID();
+      write((items) => [...items, { ...note, id }]);
+      return id;
+    },
     async update(id, patch) { write((items) => items.map((note) => note.id === id ? { ...note, ...patch } : note)); },
     async remove(id) { write((items) => items.filter((note) => note.id !== id)); },
     async addTags(ids, tags, updatedAt) {
@@ -77,7 +81,10 @@ export async function openCloud(config) {
       }, onError);
       return {
         disconnect,
-        add: (note) => dbSdk.addDoc(collection, note),
+        async add(note) {
+          const created = await dbSdk.addDoc(collection, note);
+          return created.id;
+        },
         update: (id, patch) => dbSdk.updateDoc(ref(id), patch),
         remove: (id) => dbSdk.deleteDoc(ref(id)),
         async addTags(ids, tags, updatedAt) {
