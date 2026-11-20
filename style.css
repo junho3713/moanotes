@@ -197,8 +197,11 @@ dialog.capture-categories { width: min(540px, calc(100% - 32px)); }
 .auth { max-width: 485px; margin-inline: auto; padding: min(18vh, 130px) 24px 40px; }
 .auth h1 { margin-bottom: 12px; }
 .auth p, .dialog-copy { color: var(--muted); }
-.auth form { display: grid; gap: 8px; margin-top: 23px; }
-.auth .primary { margin-top: 10px; }
+.auth form, .verify-email { display: grid; gap: 8px; margin-top: 23px; }
+.auth form .primary { margin-top: 10px; }
+.auth form button, .verify-email button { min-height: 48px; }
+.auth input { min-height: 44px; }
+#verification-status:empty { display: none; }
 dialog { width: min(520px, calc(100% - 32px)); max-height: 88dvh; padding: 22px; color: var(--ink); background: var(--sheet); border: 1px solid var(--line); border-radius: 15px; box-shadow: 0 20px 65px rgb(31 48 38 / .18); }
 dialog::backdrop { background: rgb(32 45 35 / .34); }
 .dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }

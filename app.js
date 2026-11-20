@@ -1,5 +1,5 @@
 import { firebaseConfig } from "./firebase-config.js";
-import { localStore, openCloud } from "./storage.js?v=6";
+import { localStore, openCloud } from "./storage.js?v=13";
 import { maxPhotoBytes, maxThumbnailBytes, photoParts, preparePhoto } from "./images.js?v=6";
 
 const byId = (id) => document.getElementById(id);
@@ -1097,6 +1097,169 @@ function onStorageError(error) {
     : "메모를 불러오지 못했어요. 새로고침해 다시 시도해 주세요.", true);
 }
 
+function resetWorkspaceSession() {
+  state.store?.disconnect();
+  state.store = null;
+  state.notes = [];
+  state.recentCapture = null;
+  showNewCategoryForm(false);
+  state.selected.clear();
+  state.selecting = false;
+  state.view = "all";
+  state.query = "";
+  byId("search").value = "";
+  byId("capture-body").value = "";
+  byId("capture-title").value = "";
+  capturePhoto.reset();
+  editPhoto.reset();
+  for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
+  setSortOpen(false);
+  showPanel(false);
+}
+
+function showAccountScreen(screen, message) {
+  byId("auth-title").textContent = screen === "signup" ? "회원가입" : screen === "verify-email" ? "이메일 인증" : "내 메모";
+  byId("auth-caption").textContent = message;
+  for (const id of ["login", "signup", "verify-email"]) byId(id).hidden = id !== screen;
+}
+
+function accountError(error, fallback) {
+  if (error.code === "auth/network-request-failed") return "인터넷 연결을 확인해 주세요.";
+  if (error.code === "auth/too-many-requests") return "요청이 많아요. 잠시 후 다시 시도해 주세요.";
+  return fallback;
+}
+
+function connectAccounts(cloud) {
+  const caption = byId("auth-caption");
+  const verificationStatus = byId("verification-status");
+  const resend = byId("resend-verification");
+  const loginPrompt = "로그인하면 폰과 PC에서 같은 메모를 볼 수 있어요.";
+  let session = 0;
+  let activeUid;
+
+  async function activateAccount(user) {
+    const attempt = ++session;
+    if (activeUid !== user?.uid) verificationStatus.textContent = "";
+    activeUid = user?.uid;
+    resetWorkspaceSession();
+    showWorkspace(false);
+    if (!user) {
+      showAccountScreen("login", loginPrompt);
+      return false;
+    }
+    if (!user.emailVerified) {
+      showAccountScreen("loading", "계정을 확인하는 중이에요.");
+      let allowed;
+      try {
+        allowed = await cloud.hasMemoAccess(user.uid);
+      } catch {
+        if (attempt === session) showAccountScreen("verify-email", "계정을 확인하지 못했어요. 연결을 확인하고 다시 시도해 주세요.");
+        return false;
+      }
+      if (attempt !== session) return false;
+      if (!allowed) {
+        showAccountScreen("verify-email", "메일에서 인증 링크를 연 뒤 아래 버튼을 눌러 주세요.");
+        return false;
+      }
+    }
+    state.store = cloud.getStore(user.uid, onNotes, onStorageError);
+    render();
+    updateCaptureButton();
+    setConnection("메모 불러오는 중");
+    showWorkspace(true);
+    return true;
+  }
+
+  async function sendVerification(user) {
+    if (!user || resend.disabled) return;
+    resend.disabled = true;
+    verificationStatus.textContent = "인증 메일을 보내는 중이에요.";
+    let message;
+    try {
+      await cloud.sendVerification(user);
+      message = "인증 메일을 보냈어요. 보이지 않으면 스팸함을 확인해 주세요.";
+    } catch (error) {
+      message = accountError(error, "메일을 보내지 못했어요. 다시 보내기를 눌러 주세요.");
+    } finally {
+      resend.disabled = false;
+    }
+    if (cloud.currentUser()?.uid === user.uid) verificationStatus.textContent = message;
+  }
+
+  byId("show-signup").addEventListener("click", () => {
+    byId("password").value = "";
+    byId("signup-email").value ||= byId("email").value;
+    showAccountScreen("signup", "인증 링크를 받을 이메일과 비밀번호를 입력해 주세요.");
+    byId("signup-email").focus();
+  });
+  byId("back-to-login").addEventListener("click", () => {
+    byId("signup-password").value = "";
+    showAccountScreen("login", loginPrompt);
+    byId("email").focus();
+  });
+
+  for (const id of ["login", "signup"]) {
+    const signup = id === "signup";
+    const form = byId(id);
+    const controls = [...form.querySelectorAll("button")];
+    const email = byId(signup ? "signup-email" : "email");
+    const password = byId(signup ? "signup-password" : "password");
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (controls[0].disabled) return;
+      for (const button of controls) button.disabled = true;
+      caption.textContent = signup ? "계정을 만드는 중이에요." : "로그인하는 중이에요.";
+      try {
+        if (signup) {
+          const { user } = await cloud.signUp(email.value.trim(), password.value);
+          password.value = "";
+          await sendVerification(user);
+        } else {
+          await cloud.signIn(email.value.trim(), password.value);
+          password.value = "";
+        }
+      } catch (error) {
+        const message = error.code === "auth/weak-password" || error.code === "auth/password-does-not-meet-requirements"
+          ? "비밀번호를 더 길고 다양하게 만들어 주세요."
+          : signup ? "가입하지 못했어요. 이미 만든 계정이 있다면 로그인해 주세요."
+            : "이메일과 비밀번호를 확인해 주세요.";
+        caption.textContent = accountError(error, message);
+      } finally {
+        for (const button of controls) button.disabled = false;
+      }
+    });
+  }
+
+  resend.addEventListener("click", () => void sendVerification(cloud.currentUser()));
+  byId("check-verification").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const user = cloud.currentUser();
+    if (!user) return;
+    button.disabled = true;
+    verificationStatus.textContent = "이메일 인증을 확인하고 있어요.";
+    try {
+      await cloud.refreshVerification(user);
+      if (cloud.currentUser()?.uid !== user.uid) return;
+      if (!await activateAccount(user) && cloud.currentUser()?.uid === user.uid) {
+        verificationStatus.textContent = "아직 이메일 인증이 확인되지 않았어요.";
+      }
+    } catch (error) {
+      if (cloud.currentUser()?.uid === user.uid) {
+        verificationStatus.textContent = accountError(error, "인증 상태를 확인하지 못했어요. 다시 시도해 주세요.");
+      }
+    } finally {
+      button.disabled = false;
+    }
+  });
+  for (const id of ["signout", "mobile-signout", "verification-signout"]) {
+    byId(id).hidden = false;
+    byId(id).addEventListener("click", () => cloud.signOut().catch(() => toast("로그아웃을 다시 시도해 주세요.", true)));
+  }
+  cloud.observeAuth((user) => void activateAccount(user), () => {
+    showAccountScreen("loading", "로그인 연결을 확인해 주세요.");
+  });
+}
+
 async function start() {
   if (!firebaseConfig) {
     state.store = localStore(onNotes, onStorageError);
@@ -1105,55 +1268,7 @@ async function start() {
     return;
   }
   try {
-    const cloud = await openCloud(firebaseConfig);
-    for (const id of ["signout", "mobile-signout"]) {
-      byId(id).hidden = false;
-      byId(id).addEventListener("click", () => cloud.signOut().catch(() => toast("로그아웃을 다시 시도해 주세요.", true)));
-    }
-    byId("login").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const submit = event.currentTarget.querySelector("button");
-      submit.disabled = true;
-      byId("auth-caption").textContent = "로그인하는 중이에요.";
-      try {
-        await cloud.signIn(byId("email").value.trim(), byId("password").value);
-        byId("password").value = "";
-      } catch (error) {
-        byId("auth-caption").textContent = error.code === "auth/network-request-failed"
-          ? "인터넷 연결을 확인해 주세요." : "이메일과 비밀번호를 확인해 주세요.";
-      } finally {
-        submit.disabled = false;
-      }
-    });
-    cloud.observeAuth((user) => {
-      state.store?.disconnect();
-      state.store = null;
-      state.notes = [];
-      state.recentCapture = null;
-      showNewCategoryForm(false);
-      state.selected.clear();
-      state.view = "all";
-      state.query = "";
-      byId("search").value = "";
-      byId("capture-body").value = "";
-      byId("capture-title").value = "";
-      capturePhoto.reset();
-      editPhoto.reset();
-      updateCaptureButton();
-      for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
-      setSortOpen(false);
-      showPanel(false);
-      if (!user) {
-        showWorkspace(false);
-        byId("auth-caption").textContent = "로그인하면 폰과 PC에서 같은 메모를 볼 수 있어요.";
-        byId("login").hidden = false;
-        return;
-      }
-      state.store = cloud.getStore(user.uid, onNotes, onStorageError);
-      render();
-      setConnection("메모 불러오는 중");
-      showWorkspace(true);
-    }, () => { byId("auth-caption").textContent = "로그인 연결을 확인해 주세요."; });
+    connectAccounts(await openCloud(firebaseConfig));
   } catch {
     byId("auth-caption").textContent = "로그인 화면을 불러오지 못했어요. 인터넷 연결을 확인한 뒤 다시 열어 주세요.";
   }

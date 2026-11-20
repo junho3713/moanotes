@@ -78,10 +78,28 @@ export async function openCloud(config) {
   ]);
   const app = appSdk.initializeApp(config);
   const auth = authSdk.getAuth(app);
+  auth.languageCode = "ko";
   const db = dbSdk.getFirestore(app);
   return {
     observeAuth: (next, error) => authSdk.onAuthStateChanged(auth, next, error),
+    currentUser: () => auth.currentUser,
     signIn: (email, password) => authSdk.signInWithEmailAndPassword(auth, email, password),
+    signUp: (email, password) => authSdk.createUserWithEmailAndPassword(auth, email, password),
+    sendVerification: (user) => authSdk.sendEmailVerification(user),
+    async refreshVerification(user) {
+      await authSdk.reload(user);
+      if (user.emailVerified) await authSdk.getIdToken(user, true);
+    },
+    async hasMemoAccess(uid) {
+      const notes = dbSdk.collection(db, "users", uid, "notes");
+      try {
+        await dbSdk.getDocsFromServer(dbSdk.query(notes, dbSdk.limit(1)));
+        return true;
+      } catch (error) {
+        if (error.code === "permission-denied") return false;
+        throw error;
+      }
+    },
     signOut: () => authSdk.signOut(auth),
     getStore(uid, onChange, onError) {
       const collection = dbSdk.collection(db, "users", uid, "notes");

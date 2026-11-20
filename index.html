@@ -8,8 +8,8 @@
   <meta name="description" content="모아에서 생각을 빠르게 기록하고, 주제로 모아보세요.">
   <title>모아 — 개인 메모장</title>
   <link rel="icon" href="./moa.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=12">
-  <script type="module" src="./app.js?v=12"></script>
+  <link rel="stylesheet" href="./style.css?v=13">
+  <script type="module" src="./app.js?v=13"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -122,15 +122,30 @@
     </div>
 
     <section class="auth" id="auth">
-      <h1>내 메모</h1>
+      <h1 id="auth-title">내 메모</h1>
       <p id="auth-caption" role="status">메모장을 여는 중이에요.</p>
-      <form id="login" hidden>
+      <form id="login" method="post" hidden>
         <label for="email">이메일</label>
         <input id="email" type="email" autocomplete="username" required>
         <label for="password">비밀번호</label>
         <input id="password" type="password" autocomplete="current-password" required>
         <button type="submit" class="primary">로그인</button>
+        <button type="button" class="plain-btn" id="show-signup">회원가입</button>
       </form>
+      <form id="signup" method="post" hidden>
+        <label for="signup-email">이메일</label>
+        <input id="signup-email" type="email" autocomplete="username" required>
+        <label for="signup-password">비밀번호 <span class="field-optional">8자 이상</span></label>
+        <input id="signup-password" type="password" autocomplete="new-password" minlength="8" required>
+        <button type="submit" class="primary">가입하고 인증 메일 받기</button>
+        <button type="button" class="plain-btn" id="back-to-login">로그인으로 돌아가기</button>
+      </form>
+      <div class="verify-email" id="verify-email" hidden>
+        <button type="button" class="primary" id="check-verification">인증했어요</button>
+        <button type="button" class="soft-btn" id="resend-verification">인증 메일 다시 보내기</button>
+        <button type="button" class="plain-btn" id="verification-signout">다른 계정으로 로그인</button>
+        <p id="verification-status" role="status"></p>
+      </div>
     </section>
     <noscript>모아를 사용하려면 브라우저에서 JavaScript를 켜 주세요.</noscript>
   </main>
