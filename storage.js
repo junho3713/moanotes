@@ -79,11 +79,14 @@ export async function openCloud(config) {
   const app = appSdk.initializeApp(config);
   const auth = authSdk.getAuth(app);
   auth.languageCode = "ko";
+  const google = new authSdk.GoogleAuthProvider();
+  google.setCustomParameters({ prompt: "select_account" });
   const db = dbSdk.getFirestore(app);
   return {
     observeAuth: (next, error) => authSdk.onAuthStateChanged(auth, next, error),
     currentUser: () => auth.currentUser,
     signIn: (email, password) => authSdk.signInWithEmailAndPassword(auth, email, password),
+    signInWithGoogle: () => authSdk.signInWithPopup(auth, google),
     signUp: (email, password) => authSdk.createUserWithEmailAndPassword(auth, email, password),
     sendVerification: (user) => authSdk.sendEmailVerification(user),
     async refreshVerification(user) {

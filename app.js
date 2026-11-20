@@ -1,5 +1,5 @@
 import { firebaseConfig } from "./firebase-config.js";
-import { localStore, openCloud } from "./storage.js?v=13";
+import { localStore, openCloud } from "./storage.js?v=14";
 import { maxPhotoBytes, maxThumbnailBytes, photoParts, preparePhoto } from "./images.js?v=6";
 
 const byId = (id) => document.getElementById(id);
@@ -1133,6 +1133,8 @@ function connectAccounts(cloud) {
   const caption = byId("auth-caption");
   const verificationStatus = byId("verification-status");
   const resend = byId("resend-verification");
+  const login = byId("login");
+  const loginButtons = [...login.querySelectorAll("button")];
   const loginPrompt = "로그인하면 폰과 PC에서 같은 메모를 볼 수 있어요.";
   let session = 0;
   let activeUid;
@@ -1198,10 +1200,29 @@ function connectAccounts(cloud) {
     byId("email").focus();
   });
 
+  byId("google-login").addEventListener("click", async () => {
+    for (const button of loginButtons) button.disabled = true;
+    caption.textContent = "Google 계정을 확인하는 중이에요.";
+    try {
+      await cloud.signInWithGoogle();
+      byId("password").value = "";
+    } catch (error) {
+      const messages = {
+        "auth/popup-closed-by-user": "Google 로그인 창이 닫혔어요. 다시 시도해 주세요.",
+        "auth/popup-blocked": "브라우저에서 팝업을 허용한 뒤 다시 눌러 주세요.",
+        "auth/account-exists-with-different-credential": "같은 이메일로 만든 계정이 있어요. 이메일과 비밀번호로 로그인해 주세요.",
+        "auth/unauthorized-domain": "이 주소에서는 Google 로그인을 사용할 수 없어요. 이메일로 로그인해 주세요.",
+      };
+      caption.textContent = accountError(error, messages[error.code] ?? "Google 로그인에 실패했어요. 다시 시도해 주세요.");
+    } finally {
+      for (const button of loginButtons) button.disabled = false;
+    }
+  });
+
   for (const id of ["login", "signup"]) {
     const signup = id === "signup";
     const form = byId(id);
-    const controls = [...form.querySelectorAll("button")];
+    const controls = signup ? [...form.querySelectorAll("button")] : loginButtons;
     const email = byId(signup ? "signup-email" : "email");
     const password = byId(signup ? "signup-password" : "password");
     form.addEventListener("submit", async (event) => {

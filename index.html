@@ -8,8 +8,8 @@
   <meta name="description" content="모아에서 생각을 빠르게 기록하고, 주제로 모아보세요.">
   <title>모아 — 개인 메모장</title>
   <link rel="icon" href="./moa.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=13">
-  <script type="module" src="./app.js?v=13"></script>
+  <link rel="stylesheet" href="./style.css?v=14">
+  <script type="module" src="./app.js?v=14"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -130,6 +130,7 @@
         <label for="password">비밀번호</label>
         <input id="password" type="password" autocomplete="current-password" required>
         <button type="submit" class="primary">로그인</button>
+        <button type="button" class="google-login" id="google-login"><img src="https://developers.google.com/static/identity/images/g-logo.png" alt="" width="18" height="18" referrerpolicy="no-referrer">Google로 로그인</button>
         <button type="button" class="plain-btn" id="show-signup">회원가입</button>
       </form>
       <form id="signup" method="post" hidden>
