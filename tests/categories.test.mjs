@@ -142,7 +142,7 @@ test("category menu keyboard, pin and rename actions", async () => {
     focus() { document.activeElement = this; }
     select() { this.selected = true; }
     close() { this.open = false; }
-    closest() { return this.ownerDialog ?? null; }
+    closest(selector) { return selector === ".rail-topics" ? byId("rail-topics") : this.ownerDialog ?? null; }
     getBoundingClientRect() { return { left: 12, bottom: 50 }; }
     querySelector() { return anchor; }
     querySelectorAll() { return [byId("category-pin"), byId("category-rename")]; }
@@ -170,21 +170,22 @@ test("category menu keyboard, pin and rename actions", async () => {
   };
   const counts = () => [...new Set(state.notes.flatMap((note) => note.tags))].map((name) => [name, 1]);
   const app = await source("app.js");
-  const start = app.indexOf("function categoryMenuButton(");
+  const start = app.indexOf("function renderNavigation(");
   const end = app.indexOf("function normalize(", start);
   const functions = app.slice(start, end);
   const factory = new Function("document", "window", "CSS", "byId", "node", "button", "icon",
     "categoryPreferences", "counts", "render", "openDialog", "save", "toast", "announce", "dialogFocus",
-    "validateCategoryName", "replaceCategory", "relatedNotes", "state",
-    "let categoryMenuTag = null, categoryMenuAnchor = null, renameCategoryFrom = null, categoryRenameBusy = false, categoryDrag = null;\n"
-    + functions + "\nreturn { showCategoryMenu, closeCategoryMenu };");
-  const node = (name, className, text) => Object.assign(new Element(), { textContent: text });
+    "validateCategoryName", "replaceCategory", "relatedNotes", "state", "folders", "navigationItem", "palette",
+    "let categoryMenuTag = null, categoryMenuAnchor = null, renameCategoryFrom = null, categoryRenameBusy = false, categoryDrag = null, categorySortMode = false;\n"
+    + functions + "\nreturn { showCategoryMenu, closeCategoryMenu, renderNavigation, openCategoryOrder };");
+  const node = (name, className, text) => Object.assign(new Element(), { className, textContent: text });
   const button = (className, text, handler) => { const result = node("button", className, text); result.addEventListener("click", handler); return result; };
   const api = factory(document, { innerWidth: 1200, innerHeight: 800, addEventListener() {} }, { escape: (text) => text },
-    byId, node, button, () => new Element(), prefs, counts, () => rendered++,
+    byId, node, button, () => new Element(), prefs, counts, () => { rendered++; api.renderNavigation(counts()); },
     (id) => { byId(id).open = true; }, async (action) => { await action(); return true; },
     (message) => messages.push(message), (message) => messages.push(message), new Map(),
-    categories.validateCategoryName, categories.replaceCategory, { notesChanged() {} }, state);
+    categories.validateCategoryName, categories.replaceCategory, { notesChanged() {} }, state, [],
+    (id) => { const item = new Element(); item.dataset.focusKey = "rail-" + id; return item; }, () => "tag-0");
   api.showCategoryMenu("AI", anchor);
   assert.equal(byId("category-menu").open, true);
   assert.equal(byId("category-pin").textContent, "고정");
@@ -213,7 +214,44 @@ test("category menu keyboard, pin and rename actions", async () => {
   assert.equal(state.view, "tag:개발", "active category follows its new name");
   assert.equal(byId("rename-category-dialog").open, false);
   assert.ok(rendered >= 2);
+  state.notes.push({ id: "2", tags: ["자료"], body: "다른 메모" });
   await byId("category-sort").fire("click");
-  assert.equal(byId("category-order-dialog").open, true);
-  assert.equal(byId("category-order-list").children.length, 2);
+  assert.equal(byId("category-order-dialog").open, false, "desktop sort stays inside the sidebar");
+  assert.equal(byId("category-sort").attributes["aria-pressed"], "true");
+  assert.equal(byId("category-inline-hint").hidden, false);
+  let rows = byId("topics").children;
+  assert.equal(rows.length, 3);
+  assert.ok(rows.every((row) => row.draggable), "sidebar rows can be dragged");
+  assert.ok(rows.every((row) => row.className.includes("is-sorting")), "arrows appear inline");
+  const orderedNames = () => byId("topics").children.map((row) => row.dataset.category);
+  const initialOrder = orderedNames();
+  const transfer = { setData() {} };
+  await rows[1].fire("dragstart", { dataTransfer: transfer });
+  const forbidden = await rows[0].fire("dragover", { dataTransfer: transfer });
+  assert.equal(Boolean(forbidden.prevented), false, "drag cannot cross the pinned boundary");
+  const allowed = await rows[2].fire("dragover", { dataTransfer: transfer });
+  assert.equal(allowed.prevented, true);
+  await rows[2].fire("drop", { dataTransfer: transfer });
+  assert.deepEqual(orderedNames(), [initialOrder[0], initialOrder[2], initialOrder[1]], "drop updates actual sidebar order");
+  rows = byId("topics").children;
+  await rows[2].fire("keydown", { key: "ArrowUp", altKey: true });
+  assert.deepEqual(orderedNames(), initialOrder, "Alt+Arrow reorders the sidebar");
+  await byId("category-sort").fire("click");
+  assert.equal(byId("category-sort").attributes["aria-pressed"], "false");
+  rows = byId("topics").children;
+  assert.ok(rows.every((row) => row.draggable), "direct drag also works outside arrow mode");
+  assert.ok(rows.every((row) => !row.className.includes("is-sorting")));
+  await rows[1].fire("dragstart", { dataTransfer: transfer });
+  await rows[2].fire("drop", { dataTransfer: transfer });
+  assert.deepEqual(orderedNames(), [initialOrder[0], initialOrder[2], initialOrder[1]]);
+  await byId("category-sort").fire("click");
+  await byId("topics").children[1].fire("keydown", { key: "Escape" });
+  assert.equal(byId("category-sort").attributes["aria-pressed"], "false", "Escape exits inline sorting");
+  api.openCategoryOrder();
+  assert.equal(byId("category-order-dialog").open, true, "mobile manager remains available");
+  assert.equal(byId("category-order-list").children.length, 3);
+  const html = await source("index.html");
+  for (const id of ["i-adjustments", "i-more", "i-grip", "i-arrow-up", "i-arrow-down"]) {
+    assert.ok(html.includes('id="' + id + '"'), id);
+  }
 });

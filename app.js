@@ -56,6 +56,7 @@ let categoryMenuAnchor = null;
 let renameCategoryFrom = null;
 let categoryRenameBusy = false;
 let categoryDrag = null;
+let categorySortMode = false;
 const categoryPreferences = createCategoryPreferences({
   onError: () => toast("분류 설정을 저장하지 못해 현재 창에서만 적용돼요.", true),
 });
@@ -166,8 +167,23 @@ function renderNavigation(tags) {
   }
   byId("folders").replaceChildren(...desktop);
   const topicItems = [];
-  for (const [tag, count] of categoryPreferences.ordered(tags)) {
-    const row = node("div", "topic-row");
+  const ordered = categoryPreferences.ordered(tags);
+  for (const [index, [tag, count]] of ordered.entries()) {
+    const row = node("div", "topic-row" + (categorySortMode ? " is-sorting" : ""));
+    row.dataset.category = tag;
+    row.title = "드래그해 분류 순서 바꾸기";
+    bindCategoryDrag(row, tag, "rail");
+    row.addEventListener("keydown", (event) => {
+      if (event.altKey && ["ArrowUp", "ArrowDown"].includes(event.key)) {
+        event.preventDefault();
+        moveCategory(tag, ordered[index + (event.key === "ArrowUp" ? -1 : 1)]?.[0], "rail");
+      } else if (event.key === "Escape" && categorySortMode) {
+        event.preventDefault();
+        setCategorySortMode(false);
+        render();
+        byId("category-sort").focus();
+      }
+    });
     const item = navigationItem("tag:" + tag, tag, count, node("span", "topic-dot " + palette(tag)), false);
     const chip = navigationItem("tag:" + tag, tag, count, undefined, true);
     if (categoryPreferences.isPinned(tag)) {
@@ -176,7 +192,16 @@ function renderNavigation(tags) {
       item.append(pin);
       chip.append(icon("pin"));
     }
-    row.append(item, categoryMenuButton(tag));
+    if (categorySortMode) {
+      const grip = icon("grip");
+      grip.classList.add("topic-grip");
+      const actions = node("div", "topic-sort-actions");
+      const { up, down } = categoryMoveButtons(tag, ordered, index);
+      actions.append(up, down);
+      row.append(grip, item, categoryMenuButton(tag), actions);
+    } else {
+      row.append(item, categoryMenuButton(tag));
+    }
     topicItems.push(row);
     mobile.push(chip);
   }
@@ -189,7 +214,8 @@ function renderNavigation(tags) {
 
 
 function categoryMenuButton(tag) {
-  const item = button("icon-btn topic-menu-button", "⋯", (event) => showCategoryMenu(tag, event.currentTarget));
+  const item = button("icon-btn topic-menu-button", undefined, (event) => showCategoryMenu(tag, event.currentTarget));
+  item.append(icon("more"));
   item.setAttribute("aria-label", tag + " 분류 메뉴");
   item.setAttribute("aria-haspopup", "menu");
   item.setAttribute("aria-expanded", "false");
@@ -225,9 +251,11 @@ function showCategoryMenu(tag, anchor) {
 function moveCategory(from, to, focusAction = "up") {
   if (!categoryPreferences.move(counts(), from, to)) return;
   render();
-  byId("category-order-status").textContent = "‘" + from + "’ 분류의 순서를 바꿨어요.";
-  const key = "category-" + focusAction + "-" + from;
-  const control = document.querySelector("[data-focus-key='" + CSS.escape(key) + "']");
+  const status = byId("category-order-dialog").open ? byId("category-order-status") : byId("category-inline-status");
+  status.textContent = "‘" + from + "’ 분류의 순서를 바꿨어요.";
+  const key = focusAction === "rail" ? "rail-tag:" + from : "category-" + focusAction + "-" + from;
+  const host = byId("category-order-dialog").open ? byId("category-order-dialog") : byId("topics");
+  const control = host.querySelector("[data-focus-key='" + CSS.escape(key) + "']");
   if (control && !control.disabled) control.focus();
   else focusCategoryAction(from);
 }
@@ -237,14 +265,67 @@ function focusCategoryAction(tag) {
   host.querySelector("[data-focus-key='" + CSS.escape("category-menu-" + tag) + "']")?.focus();
 }
 
+
+function setCategorySortMode(active) {
+  categorySortMode = active;
+  const toggle = byId("category-sort");
+  toggle.setAttribute("aria-pressed", String(active));
+  toggle.setAttribute("aria-label", active ? "분류 정렬 완료" : "분류 수동 정렬");
+  toggle.title = active ? "정렬 완료" : "수동 정렬";
+  toggle.replaceChildren(icon(active ? "check" : "adjustments"));
+  byId("category-inline-hint").hidden = !active;
+}
+
+function categoryMoveButtons(tag, ordered, index) {
+  const sameGroup = (other) => other && categoryPreferences.isPinned(other[0]) === categoryPreferences.isPinned(tag);
+  const up = button("icon-btn category-move", undefined, () => moveCategory(tag, ordered[index - 1]?.[0], "up"));
+  const down = button("icon-btn category-move", undefined, () => moveCategory(tag, ordered[index + 1]?.[0], "down"));
+  up.append(icon("arrow-up"));
+  down.append(icon("arrow-down"));
+  up.disabled = !sameGroup(ordered[index - 1]);
+  down.disabled = !sameGroup(ordered[index + 1]);
+  up.setAttribute("aria-label", tag + " 위로 이동");
+  down.setAttribute("aria-label", tag + " 아래로 이동");
+  up.dataset.focusKey = "category-up-" + tag;
+  down.dataset.focusKey = "category-down-" + tag;
+  return { up, down };
+}
+
+function bindCategoryDrag(row, tag, focusAction) {
+  row.draggable = true;
+  row.addEventListener("dragstart", (event) => {
+    categoryDrag = tag;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", tag);
+    row.classList.add("dragging");
+  });
+  row.addEventListener("dragover", (event) => {
+    if (!categoryDrag || categoryDrag === tag || categoryPreferences.isPinned(categoryDrag) !== categoryPreferences.isPinned(tag)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    row.classList.add("drag-over");
+  });
+  row.addEventListener("dragleave", () => row.classList.remove("drag-over"));
+  row.addEventListener("drop", (event) => {
+    event.preventDefault();
+    row.classList.remove("drag-over");
+    if (categoryDrag) moveCategory(categoryDrag, tag, focusAction);
+    categoryDrag = null;
+  });
+  row.addEventListener("dragend", () => {
+    categoryDrag = null;
+    row.classList.remove("dragging", "drag-over");
+  });
+}
+
 function renderCategoryOrder() {
   const ordered = categoryPreferences.ordered(counts());
   byId("category-order-list").replaceChildren(...ordered.map(([tag, count], index) => {
     const row = node("div", "category-order-row");
     row.draggable = true;
     row.dataset.category = tag;
-    const handle = node("span", "category-drag", "⠿");
-    handle.setAttribute("aria-hidden", "true");
+    const handle = icon("grip");
+    handle.classList.add("category-drag");
     row.append(handle);
     const label = node("span", "category-order-label", tag);
     label.title = tag;
@@ -254,33 +335,9 @@ function renderCategoryOrder() {
       pin.classList.add("topic-pin");
       row.append(pin);
     }
-    const sameGroup = (other) => other && categoryPreferences.isPinned(other[0]) === categoryPreferences.isPinned(tag);
-    const up = button("icon-btn category-move", "↑", () => moveCategory(tag, ordered[index - 1]?.[0], "up"));
-    const down = button("icon-btn category-move", "↓", () => moveCategory(tag, ordered[index + 1]?.[0], "down"));
-    up.disabled = !sameGroup(ordered[index - 1]);
-    down.disabled = !sameGroup(ordered[index + 1]);
-    up.setAttribute("aria-label", tag + " 위로 이동");
-    down.setAttribute("aria-label", tag + " 아래로 이동");
-    up.dataset.focusKey = "category-up-" + tag;
-    down.dataset.focusKey = "category-down-" + tag;
+    const { up, down } = categoryMoveButtons(tag, ordered, index);
     row.append(up, down, categoryMenuButton(tag));
-    row.addEventListener("dragstart", (event) => {
-      categoryDrag = tag;
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/plain", tag);
-      row.classList.add("dragging");
-    });
-    row.addEventListener("dragover", (event) => {
-      if (!categoryDrag || categoryPreferences.isPinned(categoryDrag) !== categoryPreferences.isPinned(tag)) return;
-      event.preventDefault();
-      event.dataTransfer.dropEffect = "move";
-    });
-    row.addEventListener("drop", (event) => {
-      event.preventDefault();
-      if (categoryDrag) moveCategory(categoryDrag, tag);
-      categoryDrag = null;
-    });
-    row.addEventListener("dragend", () => { categoryDrag = null; row.classList.remove("dragging"); });
+    bindCategoryDrag(row, tag, "up");
     return row;
   }));
 }
@@ -290,7 +347,11 @@ function openCategoryOrder() {
   openDialog("category-order-dialog");
 }
 
-byId("category-sort").addEventListener("click", openCategoryOrder);
+byId("category-sort").addEventListener("click", () => {
+  setCategorySortMode(!categorySortMode);
+  render();
+  byId("category-sort").focus();
+});
 byId("category-pin").addEventListener("click", () => {
   const tag = categoryMenuTag;
   if (!tag) return;
@@ -1486,6 +1547,7 @@ function onStorageError(error) {
 function resetWorkspaceSession() {
   closeCategoryMenu();
   categoryPreferences.use(null);
+  setCategorySortMode(false);
   renameCategoryFrom = null;
   categoryDrag = null;
   relatedNotes.reset();
