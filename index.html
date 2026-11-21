@@ -8,8 +8,8 @@
   <meta name="description" content="모아에서 생각을 빠르게 기록하고, 주제로 모아보세요.">
   <title>모아 — 개인 메모장</title>
   <link rel="icon" href="./moa.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=24">
-  <script type="module" src="./app.js?v=24"></script>
+  <link rel="stylesheet" href="./style.css?v=25">
+  <script type="module" src="./app.js?v=25"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -81,10 +81,17 @@
       </nav>
 
       <section class="capture" id="write-panel" aria-labelledby="page-title" hidden>
-        <h1 id="page-title">새 메모</h1>
+        <div class="capture-heading">
+          <h1 id="page-title">새 메모</h1>
+          <div class="memo-type-switch" role="group" aria-label="새 메모 형식">
+            <button type="button" data-capture-mode="text" aria-pressed="true">글 메모</button>
+            <button type="button" data-capture-mode="structure" aria-pressed="false">구조 메모</button>
+          </div>
+        </div>
         <form id="capture-form" class="capture-form">
           <input id="capture-title" class="capture-title" type="text" maxlength="120" aria-label="메모 제목 (선택)" placeholder="메모 제목">
           <textarea id="capture-body" rows="16" maxlength="20000" aria-label="메모 내용" placeholder="떠오르는 생각을 적어보세요"></textarea>
+          <div id="capture-structure" class="structure-editor" hidden></div>
           <div class="capture-footer" id="capture-photo">
             <input type="file" accept="image/*" data-photo-file hidden>
             <div class="photo-preview" data-photo-preview hidden>
@@ -202,8 +209,9 @@
       </div>
       <label for="edit-title">제목 <span class="field-optional">선택</span></label>
       <input type="text" id="edit-title" class="edit-title" maxlength="120" placeholder="메모 제목">
-      <label for="edit-body">내용</label>
+      <label for="edit-body" id="edit-body-label">내용</label>
       <textarea id="edit-body" rows="6" maxlength="20000"></textarea>
+      <div id="edit-structure" class="structure-editor" hidden></div>
       <div class="memo-links" id="edit-links" role="group" aria-label="메모에 있는 링크" hidden></div>
       <div class="photo-field" id="edit-photo">
         <input type="file" accept="image/*" data-photo-file hidden>
@@ -316,3 +324,4 @@
   <div class="visually-hidden" id="announcement" role="status" aria-live="polite"></div>
 </body>
 </html>
+

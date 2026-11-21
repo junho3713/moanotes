@@ -1,4 +1,6 @@
 import { firebaseConfig } from "./firebase-config.js";
+import { createStructureEditor } from "./structure-editor.js?v=25";
+import { decodeStructure, structureText, structurePrefix } from "./structure-model.js?v=25";
 import { createCategoryPreferences, replaceCategory, validateCategoryName } from "./categories.js?v=22";
 import { createRelatedNotes } from "./related-notes.js?v=21";
 import { localStore, openCloud } from "./storage.js?v=22";
@@ -47,6 +49,8 @@ const fullDate = new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeSty
 let toastTimer;
 const dialogFocus = new WeakMap();
 let capturePending = false;
+let captureMode = "text";
+let editingStructure = false;
 let batchDeleteIds = [];
 let photoViewerRequest = 0;
 let backupRequest = 0;
@@ -64,9 +68,13 @@ const relatedNotes = createRelatedNotes({
   root: byId("related-notes"),
   toggle: byId("ai-explore"),
   queryInput: byId("related-query"),
-  getNotes: () => state.notes,
+  getNotes: () => state.notes.map((note) => ({ ...note, body: structureText(note.body) })),
   getWorker: ensureClassificationWorker,
-  openNote: showEditor,
+  openNote: (note) => {
+    // Search uses readable text, but editing must retain the original structure body.
+    const current = state.notes.find(({ id }) => id === note.id);
+    if (current) showEditor(current);
+  },
 });
 
 function node(name, className, content) {
@@ -450,7 +458,7 @@ function renderClassificationMode() {
 }
 
 function classificationText(title, body) {
-  return [title, body].filter(Boolean).join(" ").replace(/\s+/gu, " ").trim().slice(0, 360);
+  return [title, structureText(body)].filter(Boolean).join(" ").replace(/\s+/gu, " ").trim().slice(0, 360);
 }
 
 function classificationExamples(skipId) {
@@ -732,19 +740,19 @@ function visibleNotes() {
   const compare = noteSorts[state.sort];
   return state.notes.filter((note) => {
     if (!matchesView(note)) return false;
-    const haystack = normalize([note.title, note.body, note.thumbnail ? "사진" : "", ...note.tags].join(" "));
+    const haystack = normalize([note.title, structureText(note.body), note.thumbnail ? "사진" : "", ...note.tags].join(" "));
     return terms.every((term) => haystack.includes(term));
   }).sort((a, b) => compare(a, b) || newestFirst(a, b) || a.id.localeCompare(b.id));
 }
 
 function noteHeading(note, firstLine) {
-  return note.title || (firstLine ?? note.body.split(/\r?\n/u, 1)[0]) || "사진 메모";
+  return note.title || (firstLine ?? structureText(note.body).split(/\r?\n/u, 1)[0]) || (decodeStructure(note.body) ? "구조 메모" : "사진 메모");
 }
 
 function makeMemoLinks(title, body, limit = Infinity) {
   const links = [];
   const seen = new Set();
-  const text = (title ?? "") + "\n" + body;
+  const text = (title ?? "") + "\n" + structureText(body);
   const pattern = /(?<![\p{L}\p{N}_@./])(?:https?:\/\/|www\.)[^\s<>"'\\\x60“”‘’]+/giu;
   for (const [match] of text.matchAll(pattern)) {
     let address = match.replace(/[.,!?;:，。！？、…]+$/u, "");
@@ -780,7 +788,8 @@ function drawNote(note) {
   const date = node("time", "", noteDate.format(note.createdAt));
   date.dateTime = new Date(note.createdAt).toISOString();
   date.title = fullDate.format(note.createdAt);
-  const [firstLine, ...rest] = note.body.split(/\r?\n/u);
+  const plainBody = structureText(note.body);
+  const [firstLine, ...rest] = plainBody.split(/\r?\n/u);
   const title = noteHeading(note, firstLine);
   if (state.selecting) {
     const check = node("input", "note-check");
@@ -808,8 +817,9 @@ function drawNote(note) {
   ));
   content.dataset.focusKey = "note-" + note.id;
   content.append(node("span", "note-title", title));
-  const preview = (note.title ? note.body : rest.join("\n")).trim();
+  const preview = (note.title ? plainBody : rest.join("\n")).trim();
   if (preview) content.append(node("span", "note-snippet", preview));
+  if (decodeStructure(note.body)) content.append(node("span", "note-kind", "구조 메모"));
   if (photoParts(note.thumbnail, maxThumbnailBytes)) {
     const image = node("img", "note-photo");
     image.alt = "";
@@ -1023,6 +1033,37 @@ const editPhoto = createPhotoField("edit-photo", (pending) => {
   byId("editor-form").querySelector("button[type='submit']").disabled = pending;
 });
 
+const captureStructure = createStructureEditor({
+  root: byId("capture-structure"),
+  onChange: () => updateCaptureButton(),
+  onSubmit: () => { if (!byId("capture-submit").disabled) byId("capture-form").requestSubmit(); },
+});
+const editStructure = createStructureEditor({
+  root: byId("edit-structure"),
+  onChange: () => {
+    if (editingStructure) { byId("edit-body").value = editStructure.getBody(); updateEditorLinks(); }
+  },
+  onSubmit: () => {
+    if (!byId("editor-form").querySelector("button[type='submit']").disabled) byId("editor-form").requestSubmit();
+  },
+});
+
+function setCaptureMode(mode) {
+  if (capturePending) return;
+  captureMode = mode;
+  const structure = mode === "structure";
+  byId("capture-body").hidden = structure;
+  byId("capture-structure").hidden = !structure;
+  for (const button of document.querySelectorAll("[data-capture-mode]")) {
+    button.setAttribute("aria-pressed", String(button.dataset.captureMode === mode));
+  }
+  if (structure) captureStructure.refresh();
+  updateCaptureButton();
+}
+for (const button of document.querySelectorAll("[data-capture-mode]")) {
+  button.addEventListener("click", () => setCaptureMode(button.dataset.captureMode));
+}
+
 function updateEditorLinks() {
   const destinations = byId("edit-links");
   const links = makeMemoLinks(byId("edit-title").value, byId("edit-body").value);
@@ -1034,11 +1075,19 @@ function showEditor(note) {
   state.editingId = note.id;
   byId("edit-title").value = note.title ?? "";
   byId("edit-body").value = note.body;
+  const structure = decodeStructure(note.body);
+  editingStructure = Boolean(structure);
+  byId("editor").classList.toggle("is-structure", editingStructure);
+  byId("edit-body").hidden = editingStructure;
+  byId("edit-body-label").hidden = editingStructure;
+  byId("edit-structure").hidden = !editingStructure;
+  if (structure) editStructure.load(structure);
   updateEditorLinks();
   editPhoto.reset(photoParts(note.thumbnail, maxThumbnailBytes) ? { id: note.id, thumbnail: note.thumbnail } : null);
   byId("delete-confirm").hidden = true;
   openDialog("editor");
-  byId("edit-body").focus();
+  if (editingStructure) editStructure.refresh();
+  else byId("edit-body").focus();
 }
 
 function showTags(ids) {
@@ -1156,6 +1205,7 @@ function fingerprint(note) {
 function validateNote(note) {
   const validDate = (value) => Number.isSafeInteger(value) && value > 0 && value < 8.64e15;
   if (!note || typeof note.body !== "string") return false;
+  if (note.body.startsWith(structurePrefix) && !decodeStructure(note.body)) return false;
   const thumbnail = note.thumbnail ?? "";
   const data = note.imageData ?? "";
   const hasPhoto = thumbnail !== "" || data !== "";
@@ -1226,7 +1276,7 @@ async function importNotes(file) {
 
 function updateCaptureButton() {
   byId("capture-submit").disabled = capturePending || capturePhoto.pending || !state.store
-    || (!byId("capture-body").value.trim() && !capturePhoto.attachment);
+    || (!(captureMode === "structure" ? captureStructure.hasContent() : byId("capture-body").value.trim()) && !capturePhoto.attachment);
 }
 
 document.addEventListener("paste", (event) => {
@@ -1270,17 +1320,22 @@ byId("capture-form").addEventListener("submit", async (event) => {
   const input = byId("capture-body");
   const titleInput = byId("capture-title");
   const titleDraft = titleInput.value;
-  const draft = input.value;
-  const body = draft.trim();
+  const mode = captureMode;
+  const draft = mode === "structure" ? captureStructure.getBody() : input.value;
+  const body = mode === "structure" ? draft : draft.trim();
   const photo = capturePhoto.attachment;
   if ((!body && !photo) || byId("capture-submit").disabled) return;
   capturePending = true;
+  captureStructure.setDisabled(true);
   const store = state.store;
   let id;
   const saved = await save(async () => { id = await store.add(noteData(body, titleDraft.trim()), photo); }, event.currentTarget);
   capturePending = false;
+  captureStructure.setDisabled(false);
   if (saved && state.store === store) {
-    if (input.value === draft) input.value = "";
+    if (mode === "structure") {
+      if (captureStructure.getBody() === draft) captureStructure.reset();
+    } else if (input.value === draft) input.value = "";
     if (titleInput.value === titleDraft) titleInput.value = "";
     capturePhoto.reset();
     showNewCategoryForm(false);
@@ -1446,13 +1501,16 @@ for (const id of ["edit-title", "edit-body"]) byId(id).addEventListener("input",
 byId("editor-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const title = byId("edit-title").value.trim();
-  const body = byId("edit-body").value.trim();
+  const body = editingStructure ? editStructure.getBody() : byId("edit-body").value.trim();
   if (editPhoto.pending || event.currentTarget.querySelector("button[type='submit']").disabled) return;
   if (!body && !editPhoto.attachment) {
     announce("내용을 적거나 사진을 추가해 주세요.", byId("editor"));
     return;
   }
-  if (await save(() => state.store.update(state.editingId, { title, body, updatedAt: Date.now() }, editPhoto.change), event.currentTarget)) {
+  editStructure.setDisabled(true);
+  const saved = await save(() => state.store.update(state.editingId, { title, body, updatedAt: Date.now() }, editPhoto.change), event.currentTarget);
+  editStructure.setDisabled(false);
+  if (saved) {
     byId("editor").close();
     toast("메모를 수정했어요.");
   }
@@ -1493,7 +1551,11 @@ byId("photo-viewer").addEventListener("close", () => {
   photoViewerRequest += 1;
   byId("photo-viewer-image").removeAttribute("src");
 });
-byId("editor").addEventListener("close", () => editPhoto.reset());
+byId("editor").addEventListener("close", () => {
+  editPhoto.reset();
+  editingStructure = false;
+  editStructure.reset();
+});
 byId("backup-dialog").addEventListener("close", () => {
   backupRequest += 1;
   setBackupBusy(false);
@@ -1565,6 +1627,10 @@ function resetWorkspaceSession() {
   byId("search").value = "";
   byId("capture-body").value = "";
   byId("capture-title").value = "";
+  captureStructure.reset();
+  editStructure.reset();
+  editingStructure = false;
+  setCaptureMode("text");
   capturePhoto.reset();
   editPhoto.reset();
   for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
@@ -1710,3 +1776,4 @@ async function start() {
 capturePhoto.reset();
 editPhoto.reset();
 void start();
+

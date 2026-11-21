@@ -371,3 +371,57 @@ dialog textarea { resize: vertical; max-height: 46dvh; }
 .topic-sort-actions .category-move { width: 22px; height: 28px; padding: 0; }
 .category-move .icon { width: 16px; height: 16px; }
 .category-drag { width: 16px; height: 22px; flex: 0 0 auto; }
+
+/* The memo type control stays beside the title without changing the writing tabs. */
+.capture-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 23px; }
+.capture-heading h1 { margin-bottom: 0; }
+.memo-type-switch { display: inline-flex; flex: 0 0 auto; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--rail); }
+.memo-type-switch button { min-height: 42px; padding: 7px 15px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 14px; font-weight: 700; white-space: nowrap; }
+.memo-type-switch button[aria-pressed="true"] { color: var(--sheet); background: var(--green); }
+.structure-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+.structure-help, .structure-touch-help, .structure-status { color: var(--muted); font-size: 12px; }
+.structure-toolbar .structure-undo { flex: 0 0 auto; min-height: 36px; padding: 4px 9px; font-size: 12px; }
+.structure-touch-help { display: none; margin-bottom: 8px; }
+.structure-scroll { max-height: min(65dvh, 680px); min-height: 390px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background-color: #f7f8f3; background-image: radial-gradient(#d7dfd1 .7px, transparent .7px); background-size: 18px 18px; overscroll-behavior: contain; }
+.structure-stage { position: relative; min-width: 100%; }
+.structure-links { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.structure-links path { fill: none; stroke: #88988a; stroke-width: 1.6; stroke-linejoin: round; }
+.structure-links .structure-preview-link { stroke: #4e7850; stroke-dasharray: 5 4; }
+.structure-node, .structure-preview { position: absolute; width: var(--structure-node-width); height: var(--structure-node-height); border: 1px solid #c9d1c6; border-radius: 5px; background: #eeefe9; }
+.structure-node.is-main { background: #e0ebda; border-color: #b6cbb0; }
+.structure-node.is-selected { z-index: 2; border-color: #547752; box-shadow: 0 0 0 1px #547752; touch-action: none; }
+.structure-node.is-editing { z-index: 3; }
+.structure-text { width: 100%; height: 100%; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; padding: 12px 27px 12px 12px; border: 0; border-radius: 4px; background: transparent; font-size: 15px; line-height: 1.5; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; touch-action: inherit; }
+.structure-node .structure-input { display: block; width: 100%; height: 100%; min-height: 0; max-height: none; margin: 0; padding: 12px 25px 12px 12px; border: 0; border-radius: 4px; resize: none; background: transparent; font-size: 15px; line-height: 1.5; }
+.structure-arrow { position: absolute; display: grid; place-items: center; width: 42px; height: 42px; padding: 0; border: 0; background: transparent; opacity: 0; pointer-events: none; }
+.structure-arrow::after { content: ""; display: block; width: 17px; height: 22px; background: #426a3e; }
+.structure-right { left: calc(100% - 20px); top: calc(50% - 21px); }
+.structure-right::after { clip-path: polygon(0 0, 100% 50%, 0 100%); }
+.structure-down { top: calc(100% - 20px); left: calc(50% - 21px); }
+.structure-down::after { width: 22px; height: 17px; clip-path: polygon(0 0, 100% 0, 50% 100%); }
+.structure-more { position: absolute; right: 2px; top: 2px; width: 25px; height: 27px; padding: 0; opacity: 0; pointer-events: none; }
+.structure-more .icon { width: 17px; height: 17px; }
+.structure-node:hover .structure-arrow, .structure-node:focus-within .structure-arrow, .structure-node.is-selected .structure-arrow,
+.structure-node:hover .structure-more, .structure-node:focus-within .structure-more, .structure-node.is-selected .structure-more { opacity: 1; pointer-events: auto; }
+.structure-node-menu { position: absolute; z-index: 4; top: 28px; right: 3px; width: 108px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--sheet); box-shadow: 0 4px 12px rgb(29 43 32 / .15); }
+.structure-remove { display: block; width: 100%; min-height: 40px; border: 0; border-radius: 5px; background: transparent; color: var(--error); font-size: 13px; }
+.structure-remove:hover { background: #f6e9e5; }
+.structure-preview { pointer-events: none; background: rgb(224 235 218 / .7); border: 2px dashed #6b9265; }
+.structure-status { min-height: 18px; margin: 5px 0; }
+.note-kind { display: block; width: fit-content; margin-top: 7px; color: var(--green-dark); font-size: 11px; font-weight: 650; }
+dialog#editor.is-structure { width: min(1100px, calc(100% - 32px)); }
+#editor.is-structure .structure-scroll { min-height: 320px; max-height: 54dvh; }
+@media (pointer: coarse) {
+  .structure-touch-help { display: block; }
+}
+@media (max-width: 740px) {
+  .capture-heading { gap: 7px; margin-bottom: 14px; }
+  .capture-heading h1 { font-size: 32px; }
+  .memo-type-switch { gap: 2px; padding: 3px; }
+  .memo-type-switch button { min-height: 40px; padding: 6px 10px; font-size: 13px; }
+  .structure-help { max-width: 70%; }
+  .structure-scroll { min-height: 360px; max-height: 60dvh; }
+  .structure-text, .structure-node .structure-input { font-size: 14px; }
+  dialog#editor.is-structure { width: calc(100% - 16px); padding: 14px; }
+}
+
