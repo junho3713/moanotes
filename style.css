@@ -391,16 +391,17 @@ dialog textarea { resize: vertical; max-height: 46dvh; }
 .structure-node.is-main { background: #e0ebda; border-color: #b6cbb0; }
 .structure-node.is-selected { z-index: 2; border-color: #547752; box-shadow: 0 0 0 1px #547752; touch-action: none; }
 .structure-node.is-editing { z-index: 3; }
-.structure-text { width: 100%; height: 100%; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; padding: 12px 27px 12px 12px; border: 0; border-radius: 4px; background: transparent; font-size: 15px; line-height: 1.5; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; touch-action: inherit; }
-.structure-node .structure-input { display: block; width: 100%; height: 100%; min-height: 0; max-height: none; margin: 0; padding: 12px 25px 12px 12px; border: 0; border-radius: 4px; resize: none; background: transparent; font-size: 15px; line-height: 1.5; }
+.structure-text { width: 100%; height: 100%; display: flex; align-items: center; overflow: hidden; padding: 6px 16px 6px 6px; border: 0; border-radius: 4px; background: transparent; font-size: 13px; line-height: 1.4; text-align: left; cursor: text; touch-action: inherit; }
+.structure-read-label { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; min-width: 0; max-width: 100%; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
+.structure-node .structure-input { display: block; width: 100%; height: 100%; min-height: 0; max-height: none; margin: 0; padding: 6px 16px 6px 6px; border: 0; border-radius: 4px; resize: none; background: transparent; font-size: 13px; line-height: 1.4; }
 .structure-arrow { position: absolute; display: grid; place-items: center; width: 42px; height: 42px; padding: 0; border: 0; background: transparent; opacity: 0; pointer-events: none; }
-.structure-arrow::after { content: ""; display: block; width: 17px; height: 22px; background: #426a3e; }
+.structure-arrow::after { content: ""; display: block; width: 12px; height: 16px; background: #426a3e; }
 .structure-right { left: calc(100% - 20px); top: calc(50% - 21px); }
 .structure-right::after { clip-path: polygon(0 0, 100% 50%, 0 100%); }
 .structure-down { top: calc(100% - 20px); left: calc(50% - 21px); }
-.structure-down::after { width: 22px; height: 17px; clip-path: polygon(0 0, 100% 0, 50% 100%); }
-.structure-more { position: absolute; right: 2px; top: 2px; width: 25px; height: 27px; padding: 0; opacity: 0; pointer-events: none; }
-.structure-more .icon { width: 17px; height: 17px; }
+.structure-down::after { width: 16px; height: 12px; clip-path: polygon(0 0, 100% 0, 50% 100%); }
+.structure-more { position: absolute; right: 1px; top: 1px; width: 22px; height: 22px; padding: 0; opacity: 0; pointer-events: none; }
+.structure-more .icon { width: 14px; height: 14px; }
 .structure-node:hover .structure-arrow, .structure-node:focus-within .structure-arrow, .structure-node.is-selected .structure-arrow,
 .structure-node:hover .structure-more, .structure-node:focus-within .structure-more, .structure-node.is-selected .structure-more { opacity: 1; pointer-events: auto; }
 .structure-node-menu { position: absolute; z-index: 4; top: 28px; right: 3px; width: 108px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--sheet); box-shadow: 0 4px 12px rgb(29 43 32 / .15); }
@@ -421,7 +422,7 @@ dialog#editor.is-structure { width: min(1100px, calc(100% - 32px)); }
   .memo-type-switch button { min-height: 40px; padding: 6px 10px; font-size: 13px; }
   .structure-help { max-width: 70%; }
   .structure-scroll { min-height: 360px; max-height: 60dvh; }
-  .structure-text, .structure-node .structure-input { font-size: 14px; }
+  .structure-text, .structure-node .structure-input { font-size: 12px; }
   dialog#editor.is-structure { width: calc(100% - 16px); padding: 14px; }
 }
 

@@ -1,5 +1,5 @@
 import { firebaseConfig } from "./firebase-config.js";
-import { createStructureEditor } from "./structure-editor.js?v=25";
+import { createStructureEditor } from "./structure-editor.js?v=26";
 import { decodeStructure, structureText, structurePrefix } from "./structure-model.js?v=25";
 import { createCategoryPreferences, replaceCategory, validateCategoryName } from "./categories.js?v=22";
 import { createRelatedNotes } from "./related-notes.js?v=21";

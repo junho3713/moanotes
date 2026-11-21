@@ -36,7 +36,7 @@ export function createStructureEditor({ root, onChange = () => {}, onSubmit = ()
   }
   function measure() {
     const compact = window.matchMedia("(max-width: 740px)").matches;
-    metrics = { w: compact ? 180 : 220, h: compact ? 110 : 120, x: compact ? 48 : 64, y: 56, pad: 36 };
+    metrics = { w: (compact ? 180 : 220) / 3, h: (compact ? 110 : 120) / 2, x: (compact ? 48 : 64) * 2 / 3, y: 56 * 2 / 3, pad: 36 };
     return metrics;
   }
   function position(node) {
@@ -107,7 +107,7 @@ export function createStructureEditor({ root, onChange = () => {}, onSubmit = ()
     if (!card) return;
     const read = card.querySelector(".structure-text");
     const node = documentValue.nodes.find((node) => node.id === id);
-    read.textContent = node.text || "내용을 적어보세요";
+    read.querySelector(".structure-read-label").textContent = node.text || "내용을 적어보세요";
     read.hidden = false;
     card.querySelector("textarea").hidden = true;
     card.classList.remove("is-editing");
@@ -177,7 +177,10 @@ export function createStructureEditor({ root, onChange = () => {}, onSubmit = ()
       card.setAttribute("role", "group"); card.setAttribute("aria-label", (index + 1) + "번째 칸");
       const read = document.createElement("button");
       read.type = "button"; read.className = "structure-text";
-      read.textContent = node.text || "내용을 적어보세요";
+      const label = document.createElement("span");
+      label.className = "structure-read-label";
+      label.textContent = node.text || "내용을 적어보세요";
+      read.append(label);
       read.setAttribute("aria-label", "칸 편집: " + (node.text.slice(0, 80) || "빈 칸"));
       read.addEventListener("click", (event) => {
         if (disabled || Date.now() < ignoreClickUntil) return;
