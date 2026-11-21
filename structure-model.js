@@ -15,7 +15,9 @@ export function validStructure(value) {
     if (!node || typeof node.id !== "string" || !node.id || node.id.length > 80 || ids.has(node.id)
       || !Number.isInteger(node.col) || !Number.isInteger(node.row) || node.col < 0 || node.row < 0
       || node.col >= maxStructureNodes || node.row >= maxStructureNodes
-      || typeof node.text !== "string" || node.text.length > 1000) return false;
+      || typeof node.text !== "string" || node.text.length > 1000
+      || (node.fontSize !== undefined && (!Number.isInteger(node.fontSize) || node.fontSize < 10 || node.fontSize > 28))
+      || (node.bold !== undefined && typeof node.bold !== "boolean")) return false;
     const cell = node.col + ":" + node.row;
     if (cells.has(cell)) return false;
     ids.add(node.id); cells.add(cell);
@@ -34,7 +36,11 @@ export function encodeStructure(value) {
   if (!validStructure(value)) throw new Error("구조 메모를 확인해 주세요.");
   const canonical = {
     version: 1,
-    nodes: value.nodes.map(({ id, col, row, text }) => ({ id, col, row, text })),
+    nodes: value.nodes.map(({ id, col, row, text, fontSize, bold }) => ({
+      id, col, row, text,
+      ...(fontSize === undefined ? {} : { fontSize }),
+      ...(bold === undefined ? {} : { bold }),
+    })),
     edges: value.edges.map(({ from, to, direction }) => ({ from, to, direction })),
   };
   const body = structurePrefix + JSON.stringify(canonical);
@@ -80,7 +86,11 @@ export function addStructureNode(value, parentId, direction) {
     const at = direction === "right" ? col : row;
     for (const node of next.nodes) if (node[axis] >= at) node[axis]++;
   }
-  const added = { id: crypto.randomUUID(), col, row, text: "" };
+  const added = {
+    id: crypto.randomUUID(), col, row, text: "",
+    ...(parent.fontSize === undefined ? {} : { fontSize: parent.fontSize }),
+    ...(parent.bold === undefined ? {} : { bold: parent.bold }),
+  };
   next.nodes.push(added);
   next.edges.push({ from: parent.id, to: added.id, direction });
   encodeStructure(next);
@@ -88,9 +98,14 @@ export function addStructureNode(value, parentId, direction) {
 }
 
 export function removeStructureNode(value, id) {
+  return removeStructureNodes(value, [id]);
+}
+
+export function removeStructureNodes(value, ids) {
+  const targets = new Set(ids);
   const next = structuredClone(value);
-  next.nodes = next.nodes.filter((node) => node.id !== id);
-  next.edges = next.edges.filter((edge) => edge.from !== id && edge.to !== id);
+  next.nodes = next.nodes.filter((node) => !targets.has(node.id));
+  next.edges = next.edges.filter((edge) => !targets.has(edge.from) && !targets.has(edge.to));
   if (!next.nodes.length) return emptyStructure();
   const cols = [...new Set(next.nodes.map(({ col }) => col))].sort((a, b) => a - b);
   const rows = [...new Set(next.nodes.map(({ row }) => row))].sort((a, b) => a - b);

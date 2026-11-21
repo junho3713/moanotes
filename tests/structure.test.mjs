@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
   emptyStructure, encodeStructure, decodeStructure, structureText, structurePrefix,
-  addStructureNode, removeStructureNode, structureHasContent, validStructure, swipeDirection,
+  addStructureNode, removeStructureNode, removeStructureNodes, structureHasContent, validStructure, swipeDirection,
 } from '../structure-model.js';
 
 test('structure survives the existing note body and backup JSON', () => {
@@ -57,6 +57,44 @@ test('limits and selected-card gesture directions reject accidental swipes', () 
   assert.equal(swipeDirection(90, 10), 'right');
   assert.equal(swipeDirection(5, 90), 'down');
   for (const [x, y] of [[30, 0], [0, 20], [-90, 0], [0, -90], [80, 80]]) assert.equal(swipeDirection(x, y), null);
+});
+
+test('box formatting survives save and is inherited without changing legacy notes', () => {
+  const legacy = emptyStructure();
+  assert.deepEqual(decodeStructure(encodeStructure(legacy)), legacy);
+  assert.equal(Object.hasOwn(decodeStructure(encodeStructure(legacy)).nodes[0], 'fontSize'), false);
+  const styled = structuredClone(legacy);
+  Object.assign(styled.nodes[0], { fontSize: 18, bold: true });
+  const added = addStructureNode(styled, styled.nodes[0].id, 'right').document;
+  assert.deepEqual(decodeStructure(encodeStructure(added)), added);
+  assert.equal(added.nodes[1].fontSize, 18);
+  assert.equal(added.nodes[1].bold, true);
+  assert.equal(Object.hasOwn(legacy.nodes[0], 'bold'), false);
+  for (const style of [{ fontSize: 9 }, { fontSize: 29 }, { fontSize: 12.5 }, { fontSize: '18' }, { bold: 'true' }]) {
+    const invalid = structuredClone(legacy);
+    Object.assign(invalid.nodes[0], style);
+    assert.throws(() => encodeStructure(invalid));
+  }
+});
+
+test('batch deletion removes only checked boxes and their edges in one immutable operation', () => {
+  let value = emptyStructure();
+  value = addStructureNode(value, value.nodes[0].id, 'right').document;
+  value = addStructureNode(value, value.nodes[0].id, 'down').document;
+  Object.assign(value.nodes[2], { text: '남겨둘 칸', fontSize: 16, bold: true });
+  const before = structuredClone(value);
+  const targets = new Set(value.nodes.slice(0, 2).map(({ id }) => id));
+  const next = removeStructureNodes(value, targets);
+  assert.deepEqual(value, before);
+  assert.equal(next.nodes.length, 1);
+  assert.deepEqual(next.nodes[0], { ...value.nodes[2], col: 0, row: 0 });
+  assert.deepEqual(next.edges, []);
+  assert.ok(validStructure(next));
+  const blank = removeStructureNodes(value, value.nodes.map(({ id }) => id));
+  assert.equal(blank.nodes.length, 1);
+  assert.equal(blank.nodes[0].text, '');
+  assert.deepEqual(blank.edges, []);
+  assert.ok(validStructure(blank));
 });
 
 test('opening a structure from AI results preserves its original editable graph', async () => {

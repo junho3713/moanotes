@@ -1,6 +1,6 @@
 import { firebaseConfig } from "./firebase-config.js";
-import { createStructureEditor } from "./structure-editor.js?v=27";
-import { decodeStructure, structureText, structurePrefix } from "./structure-model.js?v=25";
+import { createStructureEditor } from "./structure-editor.js?v=28";
+import { decodeStructure, structureText, structurePrefix } from "./structure-model.js?v=28";
 import { createCategoryPreferences, replaceCategory, validateCategoryName } from "./categories.js?v=22";
 import { createRelatedNotes } from "./related-notes.js?v=21";
 import { localStore, openCloud } from "./storage.js?v=22";

@@ -378,9 +378,19 @@ dialog textarea { resize: vertical; max-height: 46dvh; }
 .memo-type-switch { display: inline-flex; flex: 0 0 auto; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--rail); }
 .memo-type-switch button { min-height: 42px; padding: 7px 15px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 14px; font-weight: 700; white-space: nowrap; }
 .memo-type-switch button[aria-pressed="true"] { color: var(--sheet); background: var(--green); }
-.structure-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+.structure-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+.structure-format, .structure-actions { display: flex; align-items: center; gap: 6px; }
+.structure-format label { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; }
+.structure-format select { width: 58px; min-height: 36px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 7px; background: var(--sheet); color: var(--ink); font-size: 13px; }
+.structure-bold { width: 36px; min-height: 36px; padding: 4px; border: 1px solid var(--line); border-radius: 7px; background: var(--sheet); color: var(--ink); font-size: 16px; font-weight: 800; }
+.structure-bold[aria-pressed="true"] { background: var(--green); border-color: var(--green); color: var(--sheet); }
+.structure-actions { margin-left: auto; }
+.structure-toolbar .structure-actions button { flex: 0 0 auto; min-height: 36px; padding: 4px 9px; font-size: 12px; white-space: nowrap; }
+.structure-delete-toggle[aria-pressed="true"] { color: var(--error); }
+.structure-selection-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; color: var(--muted); font-size: 12px; }
+.structure-selection-bar button { min-height: 36px; padding: 4px 8px; font-size: 12px; }
+.is-delete-mode .structure-format, .is-delete-mode .structure-help, .is-delete-mode .structure-touch-help { display: none; }
 .structure-help, .structure-touch-help, .structure-status { color: var(--muted); font-size: 12px; }
-.structure-toolbar .structure-undo { flex: 0 0 auto; min-height: 36px; padding: 4px 9px; font-size: 12px; }
 .structure-touch-help { display: none; margin-bottom: 8px; }
 .structure-scroll { max-height: min(65dvh, 680px); min-height: 390px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background-color: #f7f8f3; background-image: radial-gradient(#d7dfd1 .7px, transparent .7px); background-size: 18px 18px; overscroll-behavior: contain; }
 .structure-stage { position: relative; min-width: 100%; }
@@ -391,22 +401,21 @@ dialog textarea { resize: vertical; max-height: 46dvh; }
 .structure-node.is-main { background: #e0ebda; border-color: #b6cbb0; }
 .structure-node.is-selected { z-index: 2; border-color: #547752; box-shadow: 0 0 0 1px #547752; touch-action: none; }
 .structure-node.is-editing { z-index: 3; }
-.structure-text { width: 100%; height: 100%; display: flex; align-items: center; overflow: hidden; padding: 6px 16px 6px 6px; border: 0; border-radius: 4px; background: transparent; font-size: 13px; line-height: 1.4; text-align: left; cursor: text; touch-action: inherit; }
+.structure-text { width: 100%; height: 100%; display: flex; align-items: center; overflow: hidden; padding: 6px; border: 0; border-radius: 4px; background: transparent; font-size: var(--structure-font-size, 13px); font-weight: var(--structure-font-weight, 400); line-height: 1.4; text-align: left; cursor: text; touch-action: inherit; }
 .structure-read-label { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; min-width: 0; max-width: 100%; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
-.structure-node .structure-input { display: block; width: 100%; height: 100%; min-height: 0; max-height: none; margin: 0; padding: 6px 16px 6px 6px; border: 0; border-radius: 4px; resize: none; background: transparent; font-size: 13px; line-height: 1.4; }
+.structure-node .structure-input { display: block; width: 100%; height: 100%; min-height: 0; max-height: none; margin: 0; padding: 6px; border: 0; border-radius: 4px; resize: none; background: transparent; font-size: var(--structure-font-size, 13px); font-weight: var(--structure-font-weight, 400); line-height: 1.4; }
 .structure-arrow { position: absolute; display: grid; place-items: center; width: 42px; height: 42px; padding: 0; border: 0; background: transparent; opacity: 0; pointer-events: none; }
 .structure-arrow::after { content: ""; display: block; width: 12px; height: 16px; background: #426a3e; }
 .structure-right { left: calc(100% - 20px); top: calc(50% - 21px); }
 .structure-right::after { clip-path: polygon(0 0, 100% 50%, 0 100%); }
 .structure-down { top: calc(100% - 20px); left: calc(50% - 21px); }
 .structure-down::after { width: 16px; height: 12px; clip-path: polygon(0 0, 100% 0, 50% 100%); }
-.structure-more { position: absolute; right: 1px; top: 1px; width: 22px; height: 22px; padding: 0; opacity: 0; pointer-events: none; }
-.structure-more .icon { width: 14px; height: 14px; }
-.structure-node:hover .structure-arrow, .structure-node:focus-within .structure-arrow, .structure-node.is-selected .structure-arrow,
-.structure-node:hover .structure-more, .structure-node:focus-within .structure-more, .structure-node.is-selected .structure-more { opacity: 1; pointer-events: auto; }
-.structure-node-menu { position: absolute; z-index: 4; top: 28px; right: 3px; width: 108px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--sheet); box-shadow: 0 4px 12px rgb(29 43 32 / .15); }
-.structure-remove { display: block; width: 100%; min-height: 40px; border: 0; border-radius: 5px; background: transparent; color: var(--error); font-size: 13px; }
-.structure-remove:hover { background: #f6e9e5; }
+.structure-node:hover .structure-arrow, .structure-node:focus-within .structure-arrow, .structure-node.is-selected .structure-arrow { opacity: 1; pointer-events: auto; }
+.structure-delete-check { position: absolute; top: -8px; left: -8px; z-index: 4; width: 20px; height: 20px; margin: 0; accent-color: var(--green); cursor: pointer; }
+.is-delete-mode .structure-arrow { display: none; }
+.is-delete-mode .structure-text { cursor: pointer; }
+.is-delete-mode .structure-node { touch-action: auto; }
+.structure-node.is-delete-selected { border-color: var(--error); box-shadow: 0 0 0 1px var(--error); background: #f6e9e5; }
 .structure-preview { pointer-events: none; background: rgb(224 235 218 / .7); border: 2px dashed #6b9265; }
 .structure-status { min-height: 18px; margin: 5px 0; }
 .note-kind { display: block; width: fit-content; margin-top: 7px; color: var(--green-dark); font-size: 11px; font-weight: 650; }
@@ -420,9 +429,9 @@ dialog#editor.is-structure { width: min(1100px, calc(100% - 32px)); }
   .capture-heading h1 { font-size: 32px; }
   .memo-type-switch { gap: 2px; padding: 3px; }
   .memo-type-switch button { min-height: 40px; padding: 6px 10px; font-size: 13px; }
-  .structure-help { max-width: 70%; }
+  .structure-help { max-width: 100%; }
   .structure-scroll { min-height: 360px; max-height: 60dvh; }
-  .structure-text, .structure-node .structure-input { font-size: 12px; }
+  .structure-text, .structure-node .structure-input { font-size: var(--structure-font-size, 12px); }
   dialog#editor.is-structure { width: calc(100% - 16px); padding: 14px; }
 }
 
