@@ -36,7 +36,7 @@ export function createStructureEditor({ root, onChange = () => {}, onSubmit = ()
   }
   function measure() {
     const compact = window.matchMedia("(max-width: 740px)").matches;
-    metrics = { w: (compact ? 180 : 220) / 3, h: (compact ? 110 : 120) / 2, x: (compact ? 48 : 64) * 2 / 3, y: 56 * 2 / 3, pad: 36 };
+    metrics = { w: compact ? 60 : 100, h: (compact ? 110 : 120) / 2, x: (compact ? 48 : 64) * 2 / 3, y: 56 * 2 / 3, pad: 36 };
     return metrics;
   }
   function position(node) {
